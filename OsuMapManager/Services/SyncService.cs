@@ -29,7 +29,7 @@ public class SyncService
         SyncFilter filter, IProgress<string>? progress = null)
     {
         progress?.Report("Loading local beatmap data...");
-        var localBeatmaps = _osuData.GetLocalBeatmapInfo();
+        var localBeatmaps = await _osuData.GetLocalBeatmapInfoAsync();
         var localSetIds = localBeatmaps.Select(b => b.BeatmapSetId).ToHashSet();
 
         progress?.Report("Loading beatmap metadata...");

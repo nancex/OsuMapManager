@@ -29,9 +29,9 @@ public class CollectionService
     /// <summary>
     /// Gets all local collections from osu!.
     /// </summary>
-    public List<CollectionInfo> GetLocalCollections()
+    public async Task<List<CollectionInfo>> GetLocalCollectionsAsync()
     {
-        return _osuData.GetCollections();
+        return await _osuData.GetCollectionsAsync();
     }
 
     /// <summary>

@@ -1,0 +1,114 @@
+using System;
+using System.Collections.Generic;
+using Realms;
+
+namespace OsuMapManager.Models.RealmSchema;
+
+// === Top-level objects ===
+
+public class BeatmapCollection : RealmObject
+{
+    [PrimaryKey] public Guid ID { get; set; }
+    public string Name { get; set; } = string.Empty;
+    public IList<string> BeatmapMD5Hashes { get; } = null!;
+    public DateTimeOffset LastModified { get; set; }
+}
+
+[MapTo("Beatmap")]
+public class BeatmapInfo : RealmObject
+{
+    [PrimaryKey] public Guid ID { get; set; }
+    public string DifficultyName { get; set; } = string.Empty;
+    public RulesetInfo Ruleset { get; set; } = null!;
+    public BeatmapDifficulty Difficulty { get; set; } = null!;
+    public BeatmapMetadata Metadata { get; set; } = null!;
+    public BeatmapUserSettings UserSettings { get; set; } = null!;
+    public BeatmapSetInfo? BeatmapSet { get; set; }
+
+    [MapTo("Status")] public int StatusInt { get; set; }
+    [Indexed] public int OnlineID { get; set; } = -1;
+
+    public double Length { get; set; }
+    public double BPM { get; set; }
+    public string Hash { get; set; } = string.Empty;
+    public double StarRating { get; set; } = -1;
+
+    [Indexed] public string MD5Hash { get; set; } = string.Empty;
+    public string OnlineMD5Hash { get; set; } = string.Empty;
+    public DateTimeOffset? LastLocalUpdate { get; set; }
+    public DateTimeOffset? LastOnlineUpdate { get; set; }
+    public bool Hidden { get; set; }
+    public int EndTimeObjectCount { get; set; } = -1;
+    public int TotalObjectCount { get; set; } = -1;
+    public DateTimeOffset? LastPlayed { get; set; }
+    public int BeatDivisor { get; set; } = 4;
+    public double? EditorTimestamp { get; set; }
+}
+
+[MapTo("BeatmapSet")]
+public class BeatmapSetInfo : RealmObject
+{
+    [PrimaryKey] public Guid ID { get; set; }
+    [Indexed] public int OnlineID { get; set; } = -1;
+    public DateTimeOffset DateAdded { get; set; }
+    public DateTimeOffset? DateSubmitted { get; set; }
+    public DateTimeOffset? DateRanked { get; set; }
+
+    [MapTo("Status")] public int StatusInt { get; set; }
+    public bool DeletePending { get; set; }
+    public string Hash { get; set; } = string.Empty;
+    public bool Protected { get; set; }
+
+    public IList<BeatmapInfo> Beatmaps { get; } = null!;
+}
+
+[MapTo("Ruleset")]
+public class RulesetInfo : RealmObject
+{
+    [PrimaryKey] public string ShortName { get; set; } = string.Empty;
+    [Indexed] public int OnlineID { get; set; } = -1;
+    public string Name { get; set; } = string.Empty;
+    public string InstantiationInfo { get; set; } = string.Empty;
+    public int LastAppliedDifficultyVersion { get; set; }
+    public bool Available { get; set; }
+}
+
+public class BeatmapMetadata : RealmObject
+{
+    public string Title { get; set; } = string.Empty;
+    public string TitleUnicode { get; set; } = string.Empty;
+    public string Artist { get; set; } = string.Empty;
+    public string ArtistUnicode { get; set; } = string.Empty;
+    public RealmUser Author { get; set; } = null!;
+    public string Source { get; set; } = string.Empty;
+    public string Tags { get; set; } = string.Empty;
+    public IList<string> UserTags { get; } = null!;
+    public int PreviewTime { get; set; } = -1;
+    public string AudioFile { get; set; } = string.Empty;
+    public string BackgroundFile { get; set; } = string.Empty;
+}
+
+// === Embedded objects ===
+
+public class RealmUser : EmbeddedObject
+{
+    public int OnlineID { get; set; } = 1;
+    public string Username { get; set; } = string.Empty;
+    [MapTo("CountryCode")] public string CountryString { get; set; } = string.Empty;
+}
+
+[MapTo("BeatmapDifficulty")]
+public class BeatmapDifficulty : EmbeddedObject
+{
+    public float DrainRate { get; set; }
+    public float CircleSize { get; set; }
+    public float OverallDifficulty { get; set; }
+    public float ApproachRate { get; set; }
+    public double SliderMultiplier { get; set; }
+    public double SliderTickRate { get; set; }
+}
+
+public class BeatmapUserSettings : EmbeddedObject
+{
+    public double Offset { get; set; }
+}

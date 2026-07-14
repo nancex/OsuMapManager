@@ -60,11 +60,8 @@ public partial class MainViewModel : ViewModelBase
             if (!string.IsNullOrEmpty(_settingsService.Settings.OsuInstallPath))
             {
                 _osuDataService = new OsuDataService(_settingsService.Settings.OsuInstallPath);
-                if (_osuDataService.OpenRealm())
-                {
-                    // Load local stats
-                    await RefreshLocalStatsAsync();
-                }
+                _osuDataService.TryOpen();
+                await RefreshLocalStatsAsync();
             }
 
             // Wire up services to sub-viewmodels
@@ -89,11 +86,11 @@ public partial class MainViewModel : ViewModelBase
     {
         if (_osuDataService == null) return;
 
-        await Task.Run(() =>
+        await Task.Run(async () =>
         {
             try
             {
-                var (count, totalBytes) = _osuDataService.GetLocalStats();
+                var (count, totalBytes) = await _osuDataService.GetLocalStatsAsync();
                 SyncVm.LocalBeatmapCount = count;
                 SyncVm.LocalTotalSize = FormatSize(totalBytes);
                 Console.WriteLine($"[MainViewModel] Stats refreshed: {count} sets, {SyncVm.LocalTotalSize}");

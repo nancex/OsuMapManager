@@ -97,7 +97,7 @@ public partial class ImportExportViewModel : ViewModelBase
         try
         {
             var service = new CollectionService(_osuData, _settings!);
-            var collections = await Task.Run(() => service.GetLocalCollections());
+            var collections = await service.GetLocalCollectionsAsync();
 
             foreach (var col in collections)
             {
