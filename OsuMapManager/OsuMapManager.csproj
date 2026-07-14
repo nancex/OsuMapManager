@@ -1,27 +1,21 @@
-﻿<Project Sdk="Microsoft.NET.Sdk">
+<Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup>
     <TargetFramework>net10.0</TargetFramework>
     <OutputType>WinExe</OutputType>
     <RuntimeIdentifier>win-x64</RuntimeIdentifier>
     <SelfContained>true</SelfContained>
 
-    <!-- 单文件打包与压缩 -->
-    <PublishSingleFile>true</PublishSingleFile>
-    <EnableCompressionInSingleFile>true</EnableCompressionInSingleFile>
-    <IncludeNativeLibrariesInSingleFile>true</IncludeNativeLibrariesInSingleFile>
+    <!-- Disable single-file: Realm and SkiaSharp native libs are incompatible -->
+    <PublishSingleFile>false</PublishSingleFile>
 
-    <!-- 核心修复 1：强制打包第三方原生库（解决 SkiaSharp, Realm 散落在外的问题） -->
-    <IncludeNativeLibrariesForSelfExtract>true</IncludeNativeLibrariesForSelfExtract>
-
-    <!-- 核心修复 2：彻底关闭 Trim 裁剪，避免 Avalonia 和 Realm 反射闪退 -->
+    <!-- Keep trimming off for Realm reflection -->
     <PublishTrimmed>false</PublishTrimmed>
 
-    <!-- 核心修复 3：移除所有 PDB 调试符号，大幅压缩输出体积并保持目录纯净 -->
     <DebugType>none</DebugType>
     <CopyOutputSymbolsToPublishDirectory>false</CopyOutputSymbolsToPublishDirectory>
-
     <Nullable>enable</Nullable>
     <BuiltInComInteropSupport>true</BuiltInComInteropSupport>
+    <AvaloniaBuildServicesEnabled>false</AvaloniaBuildServicesEnabled>
   </PropertyGroup>
 
   <ItemGroup>
@@ -44,4 +38,16 @@
     <PackageReference Include="Realm" Version="20.1.0" />
     <PackageReference Include="SharpZipLib" Version="1.4.2" />
   </ItemGroup>
+
+  <!-- Ensure Realm native libraries are copied to publish output -->
+  <Target Name="CopyRealmNativeLibs" AfterTargets="Publish">
+    <ItemGroup>
+      <RealmNativeFiles Include="$(PublishDir)runtimes\win-x64\native\realm.dll" />
+      <RealmNativeFiles Include="$(PublishDir)runtimes\win-x64\native\librealm.dll" />
+    </ItemGroup>
+    <Copy SourceFiles="@(RealmNativeFiles)"
+          DestinationFolder="$(PublishDir)"
+          Condition="Exists('%(Identity)')"
+          SkipUnchangedFiles="true" />
+  </Target>
 </Project>
