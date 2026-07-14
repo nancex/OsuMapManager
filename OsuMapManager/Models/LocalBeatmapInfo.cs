@@ -16,4 +16,5 @@ public class LocalBeatmapInfo
     public BeatmapStatus Status { get; set; }
     public DateTimeOffset LastModified { get; set; }
     public string BeatmapSetHash { get; set; } = string.Empty;
+    public string MD5Hash { get; set; } = string.Empty;
 }

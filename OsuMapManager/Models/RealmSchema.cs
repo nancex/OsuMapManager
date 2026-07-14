@@ -60,6 +60,13 @@ public class BeatmapSetInfo : RealmObject
     public bool Protected { get; set; }
 
     public IList<BeatmapInfo> Beatmaps { get; } = null!;
+    public IList<RealmNamedFileUsage> Files { get; } = null!;
+}
+
+[MapTo("File")]
+public class RealmFile : RealmObject
+{
+    [PrimaryKey] public string Hash { get; set; } = string.Empty;
 }
 
 [MapTo("Ruleset")]
@@ -95,6 +102,12 @@ public class RealmUser : EmbeddedObject
     public int OnlineID { get; set; } = 1;
     public string Username { get; set; } = string.Empty;
     [MapTo("CountryCode")] public string CountryString { get; set; } = string.Empty;
+}
+
+public class RealmNamedFileUsage : EmbeddedObject
+{
+    public RealmFile File { get; set; } = null!;
+    public string Filename { get; set; } = string.Empty;
 }
 
 [MapTo("BeatmapDifficulty")]

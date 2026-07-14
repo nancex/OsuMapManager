@@ -5,15 +5,16 @@ using System.IO.Compression;
 using System.Linq;
 using System.Net.Http;
 using System.Text;
+using System.Text.Json;
+using System.Text.Json.Serialization;
 using System.Threading;
 using System.Threading.Tasks;
 using OsuMapManager.Models;
+using OsuMapManager.Models.RealmSchema;
+using Realms;
 
 namespace OsuMapManager.Services;
 
-/// <summary>
-/// Handles import/export of beatmap collections.
-/// </summary>
 public class CollectionService
 {
     private readonly OsuDataService _osuData;
@@ -26,21 +27,14 @@ public class CollectionService
         _settings = settings;
     }
 
-    /// <summary>
-    /// Gets all local collections from osu!.
-    /// </summary>
-    public async Task<List<CollectionInfo>> GetLocalCollectionsAsync()
-    {
-        return await _osuData.GetCollectionsAsync();
-    }
+    public async Task<List<CollectionInfo>> GetLocalCollectionsAsync() =>
+        await _osuData.GetCollectionsAsync();
 
-    /// <summary>
-    /// Exports selected collections as a TXT file.
-    /// Format: [CollectionName] on a line, followed by one online beatmap ID per line.
-    /// </summary>
+    // ================================================================
+    // TXT Export
+    // ================================================================
     public async Task ExportCollectionsAsTxtAsync(
-        IEnumerable<CollectionInfo> collections,
-        string outputPath,
+        IEnumerable<CollectionInfo> collections, string outputPath,
         IProgress<string>? progress = null)
     {
         var sb = new StringBuilder();
@@ -48,81 +42,114 @@ public class CollectionService
         {
             progress?.Report($"Exporting {col.Name}...");
             sb.AppendLine($"[{col.Name}]");
-            foreach (var id in col.BeatmapOnlineIds)
-            {
-                sb.AppendLine(id.ToString());
-            }
-            sb.AppendLine(); // blank line between collections
+            foreach (var id in col.BeatmapOnlineIds) sb.AppendLine(id.ToString());
+            sb.AppendLine();
         }
-
         await File.WriteAllTextAsync(outputPath, sb.ToString(), Encoding.UTF8);
-        Console.WriteLine($"[CollectionService] Exported {collections.Count()} collections to TXT: {outputPath}");
+        Console.WriteLine($"[CollectionService] Exported to TXT: {outputPath}");
     }
 
-    /// <summary>
-    /// Exports selected collections as a ZIP archive.
-    /// Each collection is a folder containing .osz beatmap files.
-    /// </summary>
+    // ================================================================
+    // ZIP Export
+    // ================================================================
     public async Task ExportCollectionsAsZipAsync(
-        IEnumerable<CollectionInfo> collections,
-        string outputPath,
-        IProgress<string>? progress = null,
-        CancellationToken ct = default)
+        IEnumerable<CollectionInfo> collections, string outputPath,
+        IProgress<string>? progress = null, CancellationToken ct = default)
     {
-        var downloadDir = Path.Combine(_settings.Settings.OsuInstallPath, "downloads");
-        Directory.CreateDirectory(downloadDir);
+        var filesDir = Path.Combine(_osuData.OsuPath, "files");
+        var manifest = new ExportManifest { Version = 1 };
 
-        using var zipStream = File.Create(outputPath);
-        using var archive = new ZipArchive(zipStream, ZipArchiveMode.Create);
+        // First, get the full beatmap info to have MD5→Set mapping
+        var allBeatmaps = await _osuData.GetLocalBeatmapInfoAsync();
+        var md5ToSetId = allBeatmaps
+            .GroupBy(b => b.BeatmapSetId)
+            .ToDictionary(g => g.Key, g => g.ToList());
+
+        var allFileHashes = new HashSet<string>();
+        int processed = 0, total = collections.Sum(c => c.BeatmapOnlineIds.Count);
+
+        // Build mapping: Set OnlineID → all its file hashes (deduplicated)
+        var setFileCache = new Dictionary<int, List<(string Hash, string Filename)>>();
 
         foreach (var col in collections)
         {
-            progress?.Report($"Exporting {col.Name} ({col.BeatmapCount} beatmaps)...");
-            Console.WriteLine($"[CollectionService] Exporting collection: {col.Name}");
+            var colEntry = new ExportCollectionEntry { Name = col.Name };
+            var seenSets = new HashSet<int>();
 
-            foreach (var beatmapSetId in col.BeatmapOnlineIds)
+            foreach (var beatmapId in col.BeatmapOnlineIds)
             {
                 ct.ThrowIfCancellationRequested();
+                processed++;
+                progress?.Report($"Exporting {col.Name} ({processed}/{total})...");
 
-                var oszPath = Path.Combine(downloadDir, $"{beatmapSetId}.osz");
+                // Get set ID for this beatmap
+                var bmInfo = allBeatmaps.FirstOrDefault(b => b.OnlineId == beatmapId);
+                var setId = bmInfo?.BeatmapSetId ?? beatmapId; // fallback
 
-                // Download if not already present
-                if (!File.Exists(oszPath))
+                if (seenSets.Contains(setId)) continue;
+                seenSets.Add(setId);
+
+                // Cache file list per set
+                if (!setFileCache.TryGetValue(setId, out var setFiles))
                 {
-                    try
-                    {
-                        var url = $"https://osu.ppy.sh/beatmapsets/{beatmapSetId}/download";
-                        var response = await _http.GetAsync(url, ct);
-                        if (response.IsSuccessStatusCode)
-                        {
-                            await using var fs = File.Create(oszPath);
-                            await response.Content.CopyToAsync(fs, ct);
-                        }
-                    }
-                    catch (Exception ex)
-                    {
-                        Console.WriteLine($"[CollectionService] Failed to download {beatmapSetId}: {ex.Message}");
-                        continue;
-                    }
+                    setFiles = await _osuData.GetBeatmapSetFilesAsync(setId) ?? new();
+                    setFileCache[setId] = setFiles;
                 }
 
-                if (File.Exists(oszPath))
+                if (setFiles.Count == 0) continue;
+
+                var setEntry = new ExportSetEntry { OnlineId = setId };
+                foreach (var (hash, filename) in setFiles)
                 {
-                    var entryName = $"{col.Name}/{beatmapSetId}.osz";
-                    var entry = archive.CreateEntry(entryName, CompressionLevel.Fastest);
-                    using var entryStream = entry.Open();
-                    using var fileStream = File.OpenRead(oszPath);
-                    await fileStream.CopyToAsync(entryStream, ct);
+                    setEntry.Files.Add(new ExportFileEntry { Hash = hash, Filename = filename });
+                    allFileHashes.Add(hash);
                 }
+                colEntry.Sets.Add(setEntry);
             }
+
+            // Store collection-level MD5 hashes
+            colEntry.BeatmapMd5Hashes = col.BeatmapOnlineIds
+                .Select(id => allBeatmaps.FirstOrDefault(b => b.OnlineId == id))
+                .Where(b => b != null)
+                .Select(b => b!.MD5Hash)
+                .Where(m => !string.IsNullOrEmpty(m))
+                .ToList();
+
+            manifest.Collections.Add(colEntry);
         }
 
-        Console.WriteLine($"[CollectionService] Exported {collections.Count()} collections to ZIP: {outputPath}");
+        // Write ZIP
+        using var zipStream = File.Create(outputPath);
+        using var archive = new ZipArchive(zipStream, ZipArchiveMode.Create);
+
+        // manifest.json
+        var manifestJson = JsonSerializer.Serialize(manifest, new JsonSerializerOptions { WriteIndented = true });
+        var mEntry = archive.CreateEntry("manifest.json", CompressionLevel.Fastest);
+        using (var ms = mEntry.Open())
+        using (var sw = new StreamWriter(ms))
+            await sw.WriteAsync(manifestJson);
+
+        // Files
+        int copied = 0;
+        foreach (var hash in allFileHashes)
+        {
+            ct.ThrowIfCancellationRequested();
+            var src = Path.Combine(filesDir, hash[..1], hash[..2], hash);
+            if (!File.Exists(src)) { Console.WriteLine($"[CollectionService] Missing: {src}"); continue; }
+            var entry = archive.CreateEntry($"files/{hash[..1]}/{hash[..2]}/{hash}", CompressionLevel.Fastest);
+            using var es = entry.Open();
+            using var fs = File.OpenRead(src);
+            await fs.CopyToAsync(es, ct);
+            copied++;
+        }
+
+        progress?.Report($"Done: {manifest.Collections.Count} collections, {copied} files");
+        Console.WriteLine($"[CollectionService] ZIP export: {manifest.Collections.Count} collections, {copied} files");
     }
 
-    /// <summary>
-    /// Imports collections from a TXT file.
-    /// </summary>
+    // ================================================================
+    // TXT Import
+    // ================================================================
     public async Task<int> ImportFromTxtAsync(string filePath, IProgress<string>? progress = null)
     {
         var lines = await File.ReadAllLinesAsync(filePath, Encoding.UTF8);
@@ -131,83 +158,185 @@ public class CollectionService
 
         foreach (var line in lines)
         {
-            var trimmed = line.Trim();
-            if (string.IsNullOrEmpty(trimmed)) continue;
-
-            if (trimmed.StartsWith('[') && trimmed.EndsWith(']'))
+            var t = line.Trim();
+            if (string.IsNullOrEmpty(t)) continue;
+            if (t.StartsWith('[') && t.EndsWith(']'))
             {
-                currentCollection = trimmed[1..^1];
-                collections[currentCollection] = new List<int>();
+                currentCollection = t[1..^1];
+                collections[currentCollection] = new();
             }
-            else if (currentCollection != null && int.TryParse(trimmed, out var id))
-            {
+            else if (currentCollection != null && int.TryParse(t, out var id))
                 collections[currentCollection].Add(id);
-            }
         }
 
         int imported = 0;
         foreach (var (name, ids) in collections)
         {
             progress?.Report($"Importing {name} ({ids.Count} beatmaps)...");
-            Console.WriteLine($"[CollectionService] Importing collection: {name} with {ids.Count} beatmaps.");
-
-            // Get MD5 hashes for the online IDs
-            // Note: This requires mapping online IDs to MD5 hashes.
-            // In a full implementation, we'd look this up from the beatmap data.
-            // For now, log what would happen.
-            Console.WriteLine($"[CollectionService] Would import {ids.Count} beatmaps into collection '{name}'");
+            Console.WriteLine($"[CollectionService] Would import: {name} ({ids.Count} beatmaps)");
             imported += ids.Count;
         }
-
         return imported;
     }
 
-    /// <summary>
-    /// Imports collections from a ZIP file.
-    /// </summary>
+    // ================================================================
+    // ZIP Import: extract files + write collections to Realm
+    // ================================================================
     public async Task<int> ImportFromZipAsync(string filePath, IProgress<string>? progress = null)
     {
-        int imported = 0;
+        var targetOsuPath = _settings.Settings.OsuInstallPath;
+        var targetFilesDir = Path.Combine(targetOsuPath, "files");
+        var targetRealmPath = Path.Combine(targetOsuPath, "client.realm");
 
-        await Task.Run(() =>
+        if (!File.Exists(targetRealmPath))
+            throw new FileNotFoundException($"client.realm not found at {targetRealmPath}");
+
+        // Read manifest
+        ExportManifest manifest;
+        using (var archive = ZipFile.OpenRead(filePath))
         {
-            using var archive = ZipFile.OpenRead(filePath);
-            var collections = new Dictionary<string, List<string>>();
+            var m = archive.GetEntry("manifest.json")
+                ?? throw new InvalidDataException("manifest.json not found");
+            using var s = m.Open();
+            manifest = JsonSerializer.Deserialize<ExportManifest>(s)
+                ?? throw new InvalidDataException("Bad manifest.json");
+        }
 
+        Console.WriteLine($"[CollectionService] Import: {manifest.Collections.Count} collections");
+
+        // Step 1: Extract files
+        progress?.Report("Extracting files...");
+        int filesCopied = 0;
+        using (var archive = ZipFile.OpenRead(filePath))
+        {
             foreach (var entry in archive.Entries)
             {
-                // Entry path format: CollectionName/beatmapId.osz
-                var parts = entry.FullName.Split('/', StringSplitOptions.RemoveEmptyEntries);
-                if (parts.Length != 2) continue;
+                if (!entry.FullName.StartsWith("files/") || string.IsNullOrEmpty(entry.Name))
+                    continue;
+                var parts = entry.FullName.Split('/');
+                if (parts.Length != 4) continue;
 
-                var collectionName = parts[0];
-                var fileName = parts[1];
+                var dest = Path.Combine(targetFilesDir, parts[1], parts[2], parts[3]);
+                if (File.Exists(dest)) continue;
 
-                if (!collections.ContainsKey(collectionName))
-                    collections[collectionName] = new List<string>();
-
-                // Extract .osz to osu! downloads folder
-                var osuPath = _settings.Settings.OsuInstallPath;
-                var destPath = Path.Combine(osuPath, "downloads", fileName);
-
-                if (!File.Exists(destPath))
-                {
-                    entry.ExtractToFile(destPath, overwrite: false);
-                    Console.WriteLine($"[CollectionService] Extracted: {fileName} to downloads.");
-                }
-
-                collections[collectionName].Add(fileName);
+                Directory.CreateDirectory(Path.GetDirectoryName(dest)!);
+                entry.ExtractToFile(dest, false);
+                filesCopied++;
             }
+        }
+        progress?.Report($"Extracted {filesCopied} files");
+        Console.WriteLine($"[CollectionService] Extracted {filesCopied} files");
 
-            foreach (var (name, files) in collections)
+        // Step 2: Write collections to Realm (write mode!)
+        progress?.Report("Writing collections to Realm...");
+        int written = await WriteCollectionsToRealmAsync(targetRealmPath, manifest, progress);
+
+        progress?.Report($"Done: {written} collections written");
+        Console.WriteLine($"[CollectionService] Import done: {filesCopied} files, {written} collections");
+        return written;
+    }
+
+    private async Task<int> WriteCollectionsToRealmAsync(
+        string realmPath, ExportManifest manifest, IProgress<string>? progress)
+    {
+        return await Task.Run(() =>
+        {
+            var config = new RealmConfiguration(realmPath)
             {
-                progress?.Report($"Imported {name}: {files.Count} beatmaps.");
-                Console.WriteLine($"[CollectionService] Imported collection '{name}' with {files.Count} beatmaps.");
-            }
+                SchemaVersion = 51,
+                ShouldDeleteIfMigrationNeeded = false
+            };
 
-            imported = collections.Sum(c => c.Value.Count);
+            using var realm = Realm.GetInstance(config);
+            int written = 0;
+
+            realm.Write(() =>
+            {
+                foreach (var colEntry in manifest.Collections)
+                {
+                    try
+                    {
+                        // Create RealmFile entries for referenced files
+                        foreach (var set in colEntry.Sets)
+                            foreach (var file in set.Files)
+                                if (realm.Find<RealmFile>(file.Hash) == null) { realm.Add(new RealmFile { Hash = file.Hash }); }
+
+                        // Create or update BeatmapCollection
+                        var existing = realm.All<BeatmapCollection>()
+                            .FirstOrDefault(c => c.Name == colEntry.Name);
+
+                        if (existing != null)
+                        {
+                            int added = 0, skipped = 0;
+                            foreach (var md5 in colEntry.BeatmapMd5Hashes)
+                            {
+                                if (!existing.BeatmapMD5Hashes.Contains(md5))
+                                {
+                                    existing.BeatmapMD5Hashes.Add(md5);
+                                    added++;
+                                }
+                                else skipped++;
+                            }
+                            existing.LastModified = DateTimeOffset.UtcNow;
+                            Console.WriteLine($"[CollectionService]   '{colEntry.Name}': updated ({added} new, {skipped} skipped)");
+                        }
+                        else
+                        {
+                            var nc = new BeatmapCollection
+                            {
+                                Name = colEntry.Name,
+                                LastModified = DateTimeOffset.UtcNow
+                            };
+                            foreach (var md5 in colEntry.BeatmapMd5Hashes)
+                                nc.BeatmapMD5Hashes.Add(md5);
+                            realm.Add(nc);
+                            Console.WriteLine($"[CollectionService]   '{colEntry.Name}': created ({colEntry.BeatmapMd5Hashes.Count} beatmaps)");
+                        }
+
+                        written++;
+                    }
+                    catch (Exception ex)
+                    {
+                        Console.WriteLine($"[CollectionService]   Error '{colEntry.Name}': {ex.Message}");
+                    }
+                }
+            });
+
+            return written;
         });
-
-        return imported;
     }
 }
+
+// ================================================================
+// Manifest types
+// ================================================================
+public class ExportManifest
+{
+    [JsonPropertyName("version")] public int Version { get; set; }
+    [JsonPropertyName("collections")] public List<ExportCollectionEntry> Collections { get; set; } = new();
+}
+
+public class ExportCollectionEntry
+{
+    [JsonPropertyName("name")] public string Name { get; set; } = string.Empty;
+    [JsonPropertyName("beatmapMd5Hashes")] public List<string> BeatmapMd5Hashes { get; set; } = new();
+    [JsonPropertyName("sets")] public List<ExportSetEntry> Sets { get; set; } = new();
+}
+
+public class ExportSetEntry
+{
+    [JsonPropertyName("onlineId")] public int OnlineId { get; set; }
+    [JsonPropertyName("files")] public List<ExportFileEntry> Files { get; set; } = new();
+}
+
+public class ExportFileEntry
+{
+    [JsonPropertyName("hash")] public string Hash { get; set; } = string.Empty;
+    [JsonPropertyName("filename")] public string Filename { get; set; } = string.Empty;
+}
+
+
+
+
+
+

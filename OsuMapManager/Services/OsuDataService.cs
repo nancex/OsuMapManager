@@ -58,6 +58,8 @@ public class OsuDataService : IDisposable
         }
     }
 
+    public string OsuPath => _osuPath;
+
     private async Task<T> RunOnRealmThreadAsync<T>(Func<Realm, T> query)
     {
         if (Dispatcher.UIThread.CheckAccess())
@@ -153,7 +155,7 @@ public class OsuDataService : IDisposable
                             Creator = creator,
                             FileSize = 0,
                             Status = (BeatmapStatus)status,
-                            BeatmapSetHash = "",
+                            BeatmapSetHash = "", MD5Hash = md5Hash,
                             LastModified = DateTimeOffset.MinValue
                         });
 
@@ -246,6 +248,36 @@ public class OsuDataService : IDisposable
         }
     }
 
+    /// <summary>
+    /// Gets all files belonging to a beatmap set, identified by its OnlineID.
+    /// Returns list of (Hash, Filename) tuples for reading from local files/ directory.
+    /// </summary>
+    public async Task<List<(string Hash, string Filename)>?> GetBeatmapSetFilesAsync(int beatmapSetOnlineId)
+    {
+        try
+        {
+            return await RunOnRealmThreadAsync(realm =>
+            {
+                var set = realm.All<BeatmapSetInfo>().FirstOrDefault(s => s.OnlineID == beatmapSetOnlineId);
+                if (set == null) return null;
+
+                var files = new List<(string Hash, string Filename)>();
+                foreach (var usage in set.Files)
+                {
+                    if (!string.IsNullOrEmpty(usage.File?.Hash) && !string.IsNullOrEmpty(usage.Filename))
+                        files.Add((usage.File.Hash, usage.Filename));
+                }
+                Console.WriteLine($"[OsuDataService] Set {beatmapSetOnlineId}: {files.Count} files found");
+                return files;
+            });
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"[OsuDataService] GetBeatmapSetFilesAsync error: {ex.Message}");
+            return null;
+        }
+    }
+
     public async Task<(int Count, long TotalBytes)> GetLocalStatsAsync()
     {
         if (_cachedBeatmaps == null) await GetLocalBeatmapInfoAsync();
@@ -264,7 +296,18 @@ public class OsuDataService : IDisposable
         return (uniqueSets.Count, totalSize);
     }
 
-    public void ClearCache() { lock (_cacheLock) { _cachedBeatmaps = null; _md5ToOnlineId = null; } }
+    public void Close()
+{
+    if (!_disposed)
+    {
+        _realm?.Dispose();
+        _realm = null;
+        _opened = false;
+        Console.WriteLine("[OsuDataService] Realm closed for external write access.");
+    }
+}
+
+public void ClearCache() { lock (_cacheLock) { _cachedBeatmaps = null; _md5ToOnlineId = null; } }
     public void Dispose() { if (!_disposed) { _realm?.Dispose(); _disposed = true; } }
 
     #region DynamicApi reflection helpers
@@ -283,4 +326,5 @@ public class OsuDataService : IDisposable
 
     #endregion
 }
+
 

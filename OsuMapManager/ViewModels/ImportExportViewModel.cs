@@ -169,6 +169,9 @@ public partial class ImportExportViewModel : ViewModelBase
         IsImporting = true;
         ImportStatus = "Importing...";
 
+        // Close read-only Realm so CollectionService can open in write mode
+        _osuData.Close();
+
         try
         {
             var service = new CollectionService(_osuData, _settings);
@@ -319,3 +322,4 @@ public partial class CollectionItem : ViewModelBase
     [ObservableProperty]
     public partial bool IsSelected { get; set; }
 }
+

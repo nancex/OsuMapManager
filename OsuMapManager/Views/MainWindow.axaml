@@ -342,7 +342,7 @@
                                 </Border>
                             </Grid>
 
-                            <Grid x:Name="ExportMode" IsVisible="False" RowDefinitions="*,Auto">
+                            <Grid x:Name="ExportMode" IsVisible="False" RowDefinitions="*,Auto,Auto">
                                 <Border Grid.Row="0" Classes="Card" VerticalAlignment="Stretch">
                                     <Grid RowDefinitions="Auto,*,Auto">
                                         <StackPanel Grid.Row="0" Margin="0,0,0,12">
@@ -374,7 +374,23 @@
                                     <Button Content="Export..." Classes="Primary" HorizontalAlignment="Right"
                                             Command="{Binding ImportExportVm.ShowExportDialogCommand}"
                                             IsEnabled="{Binding !ImportExportVm.IsExporting}" />
-                                </Border>
+                                </Border>                                 <Border Grid.Row="2" Classes="Card" IsVisible="{Binding ImportExportVm.ShowExportFormatDialog}"
+                                         Background="#30FFFFFF" Margin="0,16,0,0">
+                                     <StackPanel>
+                                         <TextBlock Text="Choose Export Format" Classes="H2" Margin="0,0,0,12" />
+                                         <TextBlock Text="Select the format for your collection export:" Classes="Body" Margin="0,0,0,16" />
+                                         <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
+                                             <Button Content="Cancel" Classes="Secondary"
+                                                     Command="{Binding ImportExportVm.CancelExportDialogCommand}"
+                                                     Margin="0,0,10,0" />
+                                             <Button Content="Export as TXT" Classes="Secondary"
+                                                     Command="{Binding ImportExportVm.ExportAsTxtCommand}"
+                                                     Margin="0,0,10,0" />
+                                             <Button Content="Export as ZIP" Classes="Primary"
+                                                     Command="{Binding ImportExportVm.ExportAsZipCommand}" />
+                                         </StackPanel>
+                                     </StackPanel>
+                                 </Border>
                             </Grid>
                         </Grid>
                     </Grid>
@@ -443,3 +459,4 @@
         </Border>
     </Panel>
 </Window>
+
