@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Threading.Tasks;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
@@ -49,12 +49,12 @@ public partial class MainViewModel : ViewModelBase
             // Pass settings to SettingsVm
             SettingsVm.SetSettingsService(_settingsService);
 
-            // Initialize data dir
-            var dataDir = System.IO.Path.Combine(
-                Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
-                "OsuMapManager", "BeatmapData");
-
-            _beatmapDataService = new BeatmapDataService(dataDir);
+            // Get beatmap data service from settings (created when user selects .db file)
+            _beatmapDataService = SettingsVm.GetBeatmapDataService();
+            if (_beatmapDataService == null)
+            {
+                Console.WriteLine("[MainViewModel] No beatmap database selected yet.");
+            }
 
             // If osu path is configured, initialize osu data service
             if (!string.IsNullOrEmpty(_settingsService.Settings.OsuInstallPath))

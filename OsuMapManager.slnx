@@ -1,3 +1,4 @@
 <Solution>
   <Project Path="OsuMapManager/OsuMapManager.csproj" />
+  <Project Path="OsuMapManager.Tester/OsuMapManager.Tester.csproj" />
 </Solution>

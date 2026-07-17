@@ -1,5 +1,4 @@
 using System;
-using System.Threading;
 using System.Threading.Tasks;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
@@ -16,22 +15,17 @@ public partial class SettingsViewModel : ViewModelBase
     [ObservableProperty]
     public partial string OsuInstallPath { get; set; } = string.Empty;
 
-    // --- Download threads ---
+    // --- Database path ---
     [ObservableProperty]
-    public partial int DownloadThreads { get; set; } = 4;
+    public partial string DatabasePath { get; set; } = string.Empty;
 
     // --- Beatmap data status ---
     [ObservableProperty]
-    public partial bool IsBeatmapDataReady { get; set; }
+    public partial bool IsDatabaseReady { get; set; }
 
+    // --- Download threads ---
     [ObservableProperty]
-    public partial bool IsFetchingData { get; set; }
-
-    [ObservableProperty]
-    public partial string FetchProgressText { get; set; } = string.Empty;
-
-    [ObservableProperty]
-    public partial double FetchProgress { get; set; }
+    public partial int DownloadThreads { get; set; } = 4;
 
     // --- Download source ---
     [ObservableProperty]
@@ -51,116 +45,109 @@ public partial class SettingsViewModel : ViewModelBase
         LoadFromSettings();
     }
 
-    /// <summary>
-    /// Load current settings into view model properties.
-    /// </summary>
+    public BeatmapDataService? GetBeatmapDataService() => _beatmapDataService;
+
     private void LoadFromSettings()
     {
         if (_settingsService == null) return;
 
         var s = _settingsService.Settings;
         OsuInstallPath = s.OsuInstallPath;
+        DatabasePath = s.DatabasePath;
         DownloadThreads = s.DownloadThreads;
         UseOfficialSource = s.DownloadSource == "official";
         UseCatboyMirror = s.DownloadSource == "catboy";
-        IsBeatmapDataReady = s.BeatmapDataReady;
 
-        Console.WriteLine($"[SettingsViewModel] Loaded settings: path={OsuInstallPath}, threads={DownloadThreads}, source={(UseOfficialSource ? "official" : "catboy")}, dataReady={IsBeatmapDataReady}");
+        // Try to create the service from the saved path
+        TryOpenDatabase();
+
+        Console.WriteLine($"[SettingsViewModel] Loaded: path={OsuInstallPath}, db={DatabasePath}, threads={DownloadThreads}");
     }
 
-    /// <summary>
-    /// Save current settings.
-    /// </summary>
+    private void TryOpenDatabase()
+    {
+        if (!string.IsNullOrEmpty(DatabasePath) && System.IO.File.Exists(DatabasePath))
+        {
+            _beatmapDataService = new BeatmapDataService(DatabasePath);
+            IsDatabaseReady = _beatmapDataService.IsDataReady;
+        }
+        else
+        {
+            _beatmapDataService = null;
+            IsDatabaseReady = false;
+        }
+    }
+
     [RelayCommand]
     public void SaveSettings()
     {
         if (_settingsService == null) return;
 
         _settingsService.Settings.OsuInstallPath = OsuInstallPath;
+        _settingsService.Settings.DatabasePath = DatabasePath;
         _settingsService.Settings.DownloadThreads = Math.Clamp(DownloadThreads, 1, 16);
         _settingsService.Settings.DownloadSource = UseCatboyMirror ? "catboy" : "official";
-        _settingsService.Settings.BeatmapDataReady = IsBeatmapDataReady;
         _settingsService.Save();
 
         Console.WriteLine("[SettingsViewModel] Settings saved.");
-
     }
 
-    /// <summary>
-    /// Browse for osu! lazer installation folder.
-    /// </summary>
     [RelayCommand]
     public async Task BrowseOsuPathAsync()
     {
-        var topLevel = Avalonia.Controls.TopLevel.GetTopLevel(
-            Avalonia.Application.Current?.ApplicationLifetime is Avalonia.Controls.ApplicationLifetimes.IClassicDesktopStyleApplicationLifetime desktop
-                ? desktop.MainWindow : null);
+        var topLevel = GetTopLevel();
+        if (topLevel == null) return;
 
-        if (topLevel != null)
-        {
-            var folders = await topLevel.StorageProvider.OpenFolderPickerAsync(
-                new Avalonia.Platform.Storage.FolderPickerOpenOptions
-                {
-                    Title = "Select osu! lazer installation folder",
-                    AllowMultiple = false
-                });
-
-            if (folders.Count > 0)
+        var folders = await topLevel.StorageProvider.OpenFolderPickerAsync(
+            new Avalonia.Platform.Storage.FolderPickerOpenOptions
             {
-                OsuInstallPath = folders[0].Path.LocalPath;
-                Console.WriteLine($"[SettingsViewModel] Selected osu! path: {OsuInstallPath}");
-            }
+                Title = "Select osu! lazer installation folder",
+                AllowMultiple = false
+            });
+
+        if (folders.Count > 0)
+        {
+            OsuInstallPath = folders[0].Path.LocalPath;
+            Console.WriteLine($"[SettingsViewModel] Selected osu! path: {OsuInstallPath}");
         }
     }
 
-    /// <summary>
-    /// Download and process beatmap data from data.ppy.sh.
-    /// </summary>
     [RelayCommand]
-    public async Task FetchBeatmapDataAsync()
+    public async Task BrowseDatabasePathAsync()
     {
-        if (_settingsService == null) return;
+        var topLevel = GetTopLevel();
+        if (topLevel == null) return;
 
-        IsFetchingData = true;
-        FetchProgress = 0;
-        FetchProgressText = "Starting...";
-
-        try
-        {
-            var dataDir = System.IO.Path.Combine(
-                Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
-                "OsuMapManager", "BeatmapData");
-
-            _beatmapDataService = new BeatmapDataService(dataDir);
-
-            var progress = new Progress<(string Stage, double Progress)>(p =>
+        var files = await topLevel.StorageProvider.OpenFilePickerAsync(
+            new Avalonia.Platform.Storage.FilePickerOpenOptions
             {
-                FetchProgressText = p.Stage;
-                FetchProgress = p.Progress * 100;
+                Title = "Select beatmap database file (.db)",
+                AllowMultiple = false,
+                FileTypeFilter = new[]
+                {
+                    new Avalonia.Platform.Storage.FilePickerFileType("SQLite Database")
+                    {
+                        Patterns = new[] { "*.db", "*.sqlite", "*.sqlite3" }
+                    }
+                }
             });
 
-            var cts = new CancellationTokenSource(TimeSpan.FromMinutes(30));
-            var success = await _beatmapDataService.FetchBeatmapDataAsync(progress, cts.Token);
+        if (files.Count > 0)
+        {
+            DatabasePath = files[0].Path.LocalPath;
+            Console.WriteLine($"[SettingsViewModel] Selected database: {DatabasePath}");
+            TryOpenDatabase();
+        }
+    }
 
-            if (success)
-            {
-                IsBeatmapDataReady = true;
-                FetchProgressText = "Beatmap data ready!";
-                FetchProgress = 100;
-            }
-            else
-            {
-                FetchProgressText = "Failed to fetch beatmap data.";
-            }
-        }
-        catch (Exception ex)
+    private static Avalonia.Controls.TopLevel? GetTopLevel()
+    {
+        if (Avalonia.Application.Current?.ApplicationLifetime
+            is Avalonia.Controls.ApplicationLifetimes.IClassicDesktopStyleApplicationLifetime desktop
+            && desktop.MainWindow != null)
         {
-            FetchProgressText = $"Error: {ex.Message}";
-            Console.WriteLine($"[SettingsViewModel] Error fetching data: {ex}");
+            return Avalonia.Controls.TopLevel.GetTopLevel(desktop.MainWindow);
         }
-        finally
-        {
-            IsFetchingData = false;
-        }
+        return null;
     }
 }

@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
@@ -21,8 +21,19 @@ public class SyncService
         _osuData = osuData;
         _beatmapData = beatmapData;
         _settings = settings;
-        _http = new HttpClient { Timeout = TimeSpan.FromSeconds(30) };
-        _http.DefaultRequestHeaders.UserAgent.ParseAdd("OsuMapManager/1.0");
+        var handler = new SocketsHttpHandler
+        {
+            AllowAutoRedirect = true,
+            SslOptions = new System.Net.Security.SslClientAuthenticationOptions
+            {
+                EnabledSslProtocols = System.Security.Authentication.SslProtocols.Tls13 |
+                                       System.Security.Authentication.SslProtocols.Tls12,
+                RemoteCertificateValidationCallback = (_, _, _, _) => true,
+            }
+        };
+        _http = new HttpClient(handler) { Timeout = TimeSpan.FromSeconds(30) };
+        _http.DefaultRequestVersion = System.Net.HttpVersion.Version11;
+        _http.DefaultRequestHeaders.Add("User-Agent", "OsuMapManager/1.0");
     }
 
     public async Task<(HashSet<int> MissingSetIds, int ExtraCount)> AnalyzeAsync(
@@ -136,7 +147,7 @@ public class SyncService
     {
         var source = _settings.Settings.DownloadSource;
         return source == "catboy"
-            ? $"https://catboy.best/d/{setId}"
+            ? $"https://catboy.best/d/{setId}n"
             : $"https://osu.ppy.sh/beatmapsets/{setId}/download";
     }
 }
