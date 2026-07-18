@@ -24,8 +24,13 @@ public partial class QueryViewModel : ViewModelBase
     // --- Filter ---
     public BigFilterViewModel QueryFilter { get; } = new() { Name = "Query Filter", IsCollapsed = false };
 
-    // --- Results ---
-    public ObservableCollection<QueryBeatmapSetResult> Results { get; } = new();
+    // --- Results (separate collections per mode) ---
+    public ObservableCollection<QueryBeatmapSetResult> LocalResults { get; } = new();
+    public ObservableCollection<QueryBeatmapSetResult> DatabaseResults { get; } = new();
+
+    // Currently visible collection
+    [ObservableProperty]
+    public partial ObservableCollection<QueryBeatmapSetResult> Results { get; set; }
 
     [ObservableProperty]
     public partial bool IsQuerying { get; set; }
@@ -39,6 +44,7 @@ public partial class QueryViewModel : ViewModelBase
     public QueryViewModel()
     {
         Console.WriteLine("[QueryViewModel] Created.");
+        Results = LocalResults;
     }
 
     public void SetServices(OsuDataService? osuData, BeatmapDataService? beatmapData)
@@ -53,9 +59,9 @@ public partial class QueryViewModel : ViewModelBase
     {
         IsLocalMode = true;
         IsDatabaseMode = false;
-        Results.Clear();
-        HasResults = false;
-        QueryStatus = string.Empty;
+        Results = LocalResults;
+        HasResults = LocalResults.Count > 0;
+        QueryStatus = HasResults ? $"Showing {LocalResults.Count} local result(s)." : string.Empty;
     }
 
     [RelayCommand]
@@ -63,17 +69,14 @@ public partial class QueryViewModel : ViewModelBase
     {
         IsLocalMode = false;
         IsDatabaseMode = true;
-        Results.Clear();
-        HasResults = false;
-        QueryStatus = string.Empty;
+        Results = DatabaseResults;
+        HasResults = DatabaseResults.Count > 0;
+        QueryStatus = HasResults ? $"Showing {DatabaseResults.Count} database result(s)." : string.Empty;
     }
 
     [RelayCommand]
     public async Task ExecuteQueryAsync()
     {
-        Results.Clear();
-        HasResults = false;
-
         if (IsLocalMode)
         {
             if (_osuData == null)
@@ -102,13 +105,19 @@ public partial class QueryViewModel : ViewModelBase
         try
         {
             var filter = QueryFilter.ToSyncFilter();
-            var results = await _osuData!.QueryLocalBeatmapSetsAsync(filter);
-            foreach (var r in results)
-                Results.Add(r);
 
-            HasResults = Results.Count > 0;
-            QueryStatus = $"Found {Results.Count} beatmap set(s).";
-            Console.WriteLine($"[QueryViewModel] Local query: {Results.Count} results.");
+            // Run heavy I/O on background thread
+            var results = await Task.Run(() => _osuData!.QueryLocalBeatmapSetsAsync(filter));
+
+            // Clear and repopulate on UI thread
+            LocalResults.Clear();
+            foreach (var r in results)
+                LocalResults.Add(r);
+
+            Results = LocalResults;
+            HasResults = LocalResults.Count > 0;
+            QueryStatus = $"Found {LocalResults.Count} beatmap set(s).";
+            Console.WriteLine($"[QueryViewModel] Local query: {LocalResults.Count} results.");
         }
         catch (Exception ex)
         {
@@ -129,13 +138,17 @@ public partial class QueryViewModel : ViewModelBase
         try
         {
             var filter = QueryFilter.ToSyncFilter();
-            var results = await _beatmapData!.QueryBeatmapSetsAsync(filter);
-            foreach (var r in results)
-                Results.Add(r);
 
-            HasResults = Results.Count > 0;
-            QueryStatus = $"Found {Results.Count} beatmap set(s).";
-            Console.WriteLine($"[QueryViewModel] DB query: {Results.Count} results.");
+            var results = await Task.Run(() => _beatmapData!.QueryBeatmapSetsAsync(filter));
+
+            DatabaseResults.Clear();
+            foreach (var r in results)
+                DatabaseResults.Add(r);
+
+            Results = DatabaseResults;
+            HasResults = DatabaseResults.Count > 0;
+            QueryStatus = $"Found {DatabaseResults.Count} beatmap set(s).";
+            Console.WriteLine($"[QueryViewModel] DB query: {DatabaseResults.Count} results.");
         }
         catch (Exception ex)
         {

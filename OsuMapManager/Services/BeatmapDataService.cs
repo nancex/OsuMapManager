@@ -131,7 +131,7 @@ public class BeatmapDataService
 
         // --- Mania key count ---
         if (filter.Modes.Contains(GameMode.Mania) && filter.ManiaKeyCount.HasValue)
-            filtered = filtered.Where(b => b.KeyCount == filter.ManiaKeyCount.Value);
+            filtered = filtered.Where(b => b.KeyCount == null || b.KeyCount == filter.ManiaKeyCount.Value);
 
         // --- Difficulty Rating ---
         if (filter.DifficultyRatingMin.HasValue || filter.DifficultyRatingMax.HasValue)
@@ -206,7 +206,7 @@ public class BeatmapDataService
                     {
                         BeatmapSetId = reader.GetInt32(0),
                         Artist = SafeString(reader, 10),
-                        Title = SafeString(reader, 8),
+                        Title = SafeString(reader, 7),
                         Creator = SafeString(reader, 5),
                         GenreId = (BeatmapGenre)SafeInt(reader, 6),
                         LanguageId = (BeatmapLanguage)SafeInt(reader, 15),

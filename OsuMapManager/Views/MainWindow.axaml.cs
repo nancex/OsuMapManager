@@ -2,6 +2,8 @@ using System;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Interactivity;
+using Avalonia.Input;
+using Avalonia.Input.Platform;
 using OsuMapManager.ViewModels;
 
 namespace OsuMapManager.Views;
@@ -32,6 +34,15 @@ public partial class MainWindow : Window
         {
             await vm.InitializeAsync();
         }
+    }
+
+    protected override void OnClosing(WindowClosingEventArgs e)
+    {
+        if (DataContext is MainViewModel vm)
+        {
+            vm.SaveAllState();
+        }
+        base.OnClosing(e);
     }
 
     /// <summary>
@@ -77,4 +88,28 @@ public partial class MainWindow : Window
         ImportMode.IsVisible = tag == "import";
         ExportMode.IsVisible = tag == "export";
     }
+
+    /// <summary>
+    /// Copy the text content of a tapped cell to clipboard.
+    /// </summary>
+    private async void CopyCell_Tapped(object? sender, TappedEventArgs e)
+    {
+        if (sender is TextBlock tb && !string.IsNullOrEmpty(tb.Text))
+        {
+            try
+            {
+                var topLevel = TopLevel.GetTopLevel(this);
+                if (topLevel?.Clipboard is { } clipboard)
+                {
+                    await clipboard.SetTextAsync(tb.Text);
+                    Console.WriteLine($"[MainWindow] Copied to clipboard: {tb.Text}");
+                }
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"[MainWindow] Copy failed: {ex.Message}");
+            }
+        }
+    }
+
 }

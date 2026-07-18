@@ -87,6 +87,7 @@ public partial class SyncViewModel : ViewModelBase
         _settings = settings;
         _mainVm = mainVm;
         Console.WriteLine("[SyncViewModel] Services set.");
+        LoadFilterState();
     }
 
     private bool ValidateServices()
@@ -333,5 +334,65 @@ public partial class SyncViewModel : ViewModelBase
     public void DismissExtraPrompt()
     {
         ShowExtraPrompt = false;
+    }
+
+    /// <summary>
+    /// Save current BigFilter state to settings for persistence.
+    /// </summary>
+    public void SaveFilterState()
+    {
+        if (_settings == null) return;
+        try
+        {
+            _settings.Settings.SavedBigFilters = BigFilters
+                .Select(vm => new BigFilter
+                {
+                    Name = vm.Name,
+                    IsCollapsed = vm.IsCollapsed,
+                    Filter = vm.ToSyncFilter()
+                })
+                .ToList();
+            _settings.Save();
+            Console.WriteLine($"[SyncViewModel] Saved {BigFilters.Count} BigFilters to settings.");
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"[SyncViewModel] Failed to save filter state: {ex.Message}");
+        }
+    }
+
+    /// <summary>
+    /// Load BigFilter state from saved settings.
+    /// </summary>
+    private void LoadFilterState()
+    {
+        if (_settings == null) return;
+        try
+        {
+            var saved = _settings.Settings.SavedBigFilters;
+            if (saved.Count > 0)
+            {
+                BigFilters.Clear();
+                foreach (var bf in saved)
+                {
+                    _filterCounter++;
+                    var vm = BigFilterViewModel.FromBigFilter(bf);
+                    BigFilters.Add(vm);
+                }
+                Console.WriteLine($"[SyncViewModel] Loaded {BigFilters.Count} BigFilters from settings.");
+            }
+            else
+            {
+                // No saved filters, create one default
+                AddNewBigFilter();
+                Console.WriteLine("[SyncViewModel] No saved filters, created default.");
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"[SyncViewModel] Failed to load filter state: {ex.Message}");
+            if (BigFilters.Count == 0)
+                AddNewBigFilter();
+        }
     }
 }

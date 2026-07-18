@@ -92,6 +92,7 @@ public partial class MainViewModel : ViewModelBase
             ImportExportVm.SetServices(_osuDataService, _settingsService, _beatmapDataService);
             QueryVm.SetServices(_osuDataService, _beatmapDataService);
 
+
             IsInitialized = true;
             StatusMessage = "Ready";
             StatusForeground = "#80FFFFFF";
@@ -134,5 +135,14 @@ public partial class MainViewModel : ViewModelBase
         if (bytes >= 1_048_576) return $"{bytes / 1_048_576.0:F2} MB";
         if (bytes >= 1_024) return $"{bytes / 1_024.0:F2} KB";
         return $"{bytes} B";
+    }
+
+    /// <summary>
+    /// Save all persistent state (called on window close).
+    /// </summary>
+    public void SaveAllState()
+    {
+        SyncVm.SaveFilterState();
+        Console.WriteLine("[MainViewModel] All state saved.");
     }
 }

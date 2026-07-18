@@ -185,6 +185,54 @@ public partial class BigFilterViewModel : ViewModelBase
         BeatmapGenre.HipHop => "Hip Hop",
         _ => genre.ToString()
     };
+
+    /// <summary>
+    /// Create a BigFilterViewModel from a saved BigFilter model.
+    /// </summary>
+    public static BigFilterViewModel FromBigFilter(BigFilter bf)
+    {
+        var vm = new BigFilterViewModel
+        {
+            Name = bf.Name,
+            IsCollapsed = bf.IsCollapsed,
+            SubmitDateFrom = bf.Filter.SubmitDateFrom,
+            SubmitDateTo = bf.Filter.SubmitDateTo,
+            DifficultyRatingMin = bf.Filter.DifficultyRatingMin,
+            DifficultyRatingMax = bf.Filter.DifficultyRatingMax,
+            Artist = bf.Filter.Artist ?? string.Empty,
+            Creator = bf.Filter.Creator ?? string.Empty,
+            Title = bf.Filter.Title ?? string.Empty,
+            IncludeRanked = bf.Filter.IncludeRanked,
+            IncludeApproved = bf.Filter.IncludeApproved,
+            IncludeQualified = bf.Filter.IncludeQualified,
+            IncludeLoved = bf.Filter.IncludeLoved,
+            ManiaKeyCount = bf.Filter.ManiaKeyCount ?? 4,
+        };
+
+        // Restore genres
+        if (bf.Filter.Genres.Contains(BeatmapGenre.Any))
+        {
+            vm.AllGenresSelected = true;
+        }
+        else
+        {
+            vm.AllGenresSelected = false;
+            foreach (var g in vm.Genres)
+            {
+                g.IsSelected = bf.Filter.Genres.Contains(g.Genre);
+            }
+        }
+
+        // Restore modes
+        vm.OsuMode = bf.Filter.Modes.Contains(GameMode.Osu);
+        vm.TaikoMode = bf.Filter.Modes.Contains(GameMode.Taiko);
+        vm.CatchMode = bf.Filter.Modes.Contains(GameMode.Catch);
+        vm.ManiaMode = bf.Filter.Modes.Contains(GameMode.Mania);
+
+        Console.WriteLine($"[BigFilterVM] Loaded from saved: name={vm.Name}");
+        return vm;
+    }
+
 }
 
 /// <summary>
@@ -208,4 +256,7 @@ public partial class GenreItem : ViewModelBase
 
     [ObservableProperty]
     public partial bool IsSelected { get; set; }
+
+
+
 }

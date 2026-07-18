@@ -120,10 +120,10 @@ public class OsuDataService : IDisposable
 
                         var metadata = Prop<dynamic>(bm, "Metadata");
                         var artist = metadata != null
-                            ? (Prop<string>(metadata, "ArtistUnicode") ?? Prop<string>(metadata, "Artist") ?? "")
+                            ? (Prop<string>(metadata, "Artist") ?? Prop<string>(metadata, "ArtistUnicode") ?? "")
                             : "";
                         var title = metadata != null
-                            ? (Prop<string>(metadata, "TitleUnicode") ?? Prop<string>(metadata, "Title") ?? "")
+                            ? (Prop<string>(metadata, "Title") ?? Prop<string>(metadata, "TitleUnicode") ?? "")
                             : "";
                         var author = metadata != null ? Prop<dynamic>(metadata, "Author") : null;
                         var creator = author != null ? (Prop<string>(author, "Username") ?? "") : "";
@@ -221,11 +221,11 @@ public class OsuDataService : IDisposable
         }
 
         // Status
-        filtered = filtered.Where(b => IsLocalStatusMatch(b.Status, filter));
+        // Status not reliable in client.realm, skipped for local queries
 
         // Mania key count
         if (filter.Modes.Contains(GameMode.Mania) && filter.ManiaKeyCount.HasValue)
-            filtered = filtered.Where(b => b.KeyCount == filter.ManiaKeyCount.Value);
+            filtered = filtered.Where(b => b.KeyCount == null || b.KeyCount == filter.ManiaKeyCount.Value);
 
         // Difficulty Rating
         if (filter.DifficultyRatingMin.HasValue || filter.DifficultyRatingMax.HasValue)
@@ -262,17 +262,7 @@ public class OsuDataService : IDisposable
         return filtered.Select(b => b.BeatmapSetId).Distinct().Count();
     }
 
-    private static bool IsLocalStatusMatch(BeatmapStatus status, SyncFilter filter)
-    {
-        return status switch
-        {
-            BeatmapStatus.Ranked => filter.IncludeRanked,
-            BeatmapStatus.Approved => filter.IncludeApproved,
-            BeatmapStatus.Loved => filter.IncludeLoved,
-            BeatmapStatus.Qualified => filter.IncludeQualified,
-            _ => false
-        };
-    }
+
 
 
 
@@ -425,10 +415,10 @@ public class OsuDataService : IDisposable
                 (!filter.SubmitDateFrom.HasValue || b.DateSubmitted.Value >= filter.SubmitDateFrom.Value) &&
                 (!filter.SubmitDateTo.HasValue || b.DateSubmitted.Value <= filter.SubmitDateTo.Value));
 
-        filtered = filtered.Where(b => IsLocalStatusMatch(b.Status, filter));
+        // Status not reliable in client.realm, skipped for local queries
 
         if (filter.Modes.Contains(GameMode.Mania) && filter.ManiaKeyCount.HasValue)
-            filtered = filtered.Where(b => b.KeyCount == filter.ManiaKeyCount.Value);
+            filtered = filtered.Where(b => b.KeyCount == null || b.KeyCount == filter.ManiaKeyCount.Value);
 
         if (filter.DifficultyRatingMin.HasValue || filter.DifficultyRatingMax.HasValue)
             filtered = filtered.Where(b =>
