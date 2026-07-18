@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Threading.Tasks;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
@@ -27,9 +27,31 @@ public partial class MainViewModel : ViewModelBase
     [ObservableProperty]
     public partial string StatusMessage { get; set; } = "Ready";
 
+    [ObservableProperty]
+    public partial string StatusForeground { get; set; } = "#80FFFFFF";
+
     public MainViewModel()
     {
         Console.WriteLine("[MainViewModel] Created.");
+    }
+
+    /// <summary>
+    /// Show an error message in the status bar (red text).
+    /// </summary>
+    public void ShowError(string message)
+    {
+        StatusMessage = message;
+        StatusForeground = "#FF6B6B";
+        Console.WriteLine($"[MainViewModel] Error: {message}");
+    }
+
+    /// <summary>
+    /// Reset status bar to normal.
+    /// </summary>
+    public void ClearStatus()
+    {
+        StatusMessage = "Ready";
+        StatusForeground = "#80FFFFFF";
     }
 
     /// <summary>
@@ -49,7 +71,7 @@ public partial class MainViewModel : ViewModelBase
             // Pass settings to SettingsVm
             SettingsVm.SetSettingsService(_settingsService);
 
-            // Get beatmap data service from settings (created when user selects .db file)
+            // Get beatmap data service from settings
             _beatmapDataService = SettingsVm.GetBeatmapDataService();
             if (_beatmapDataService == null)
             {
@@ -65,16 +87,18 @@ public partial class MainViewModel : ViewModelBase
             }
 
             // Wire up services to sub-viewmodels
-            SyncVm.SetServices(_osuDataService, _beatmapDataService, _settingsService);
+            SyncVm.SetServices(_osuDataService, _beatmapDataService, _settingsService, this);
             ImportExportVm.SetServices(_osuDataService, _settingsService, _beatmapDataService);
 
             IsInitialized = true;
             StatusMessage = "Ready";
+            StatusForeground = "#80FFFFFF";
             Console.WriteLine("[MainViewModel] Initialization complete.");
         }
         catch (Exception ex)
         {
             StatusMessage = $"Init failed: {ex.Message}";
+            StatusForeground = "#FF6B6B";
             Console.WriteLine($"[MainViewModel] Init error: {ex}");
         }
     }

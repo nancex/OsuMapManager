@@ -3,13 +3,18 @@ using System.Collections.Generic;
 
 namespace OsuMapManager.Models;
 
+/// <summary>
+/// A single set of filter conditions grouped within a BigFilter.
+/// </summary>
 public class SyncFilter
 {
     public HashSet<BeatmapGenre> Genres { get; set; } = new();
-    public int YearFrom { get; set; } = 2007;
-    public int YearTo { get; set; } = DateTime.Now.Year;
-    public DateTimeOffset? DateFrom { get; set; }
-    public DateTimeOffset? DateTo { get; set; }
+    public DateTimeOffset? SubmitDateFrom { get; set; }
+    public DateTimeOffset? SubmitDateTo { get; set; }
+    public double? DifficultyRatingMin { get; set; }
+    public double? DifficultyRatingMax { get; set; }
+    public string Artist { get; set; } = string.Empty;
+    public string Creator { get; set; } = string.Empty;
     public bool IncludeRanked { get; set; } = true;
     public bool IncludeLoved { get; set; }
     public bool IncludeQualified { get; set; }

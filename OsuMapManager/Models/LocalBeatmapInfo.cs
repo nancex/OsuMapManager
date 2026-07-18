@@ -10,10 +10,11 @@ public class LocalBeatmapInfo
     public int? KeyCount { get; set; }
     public string DifficultyName { get; set; } = string.Empty;
     public string Artist { get; set; } = string.Empty;
-    public string Title { get; set; } = string.Empty;
     public string Creator { get; set; } = string.Empty;
     public long FileSize { get; set; }
     public BeatmapStatus Status { get; set; }
+    public DateTimeOffset? DateSubmitted { get; set; }
+    public double StarRating { get; set; }
     public DateTimeOffset LastModified { get; set; }
     public string BeatmapSetHash { get; set; } = string.Empty;
     public string MD5Hash { get; set; } = string.Empty;

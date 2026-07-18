@@ -1,4 +1,4 @@
-﻿using System.Data;
+using System.Data;
 using System.Net.Http;
 using ICSharpCode.SharpZipLib.BZip2;
 using ICSharpCode.SharpZipLib.Tar;
@@ -108,21 +108,12 @@ public class BeatmapDataService
         if (filter.Modes.Count > 0)
             filtered = filtered.Where(b => filter.Modes.Contains(b.Mode));
 
-        // Filter by date range (year-month-day), falls back to year range
-        if (_beatmapSets != null)
+        // Filter by submit date range
+        if (_beatmapSets != null && (filter.SubmitDateFrom.HasValue || filter.SubmitDateTo.HasValue))
         {
-            if (filter.DateFrom.HasValue || filter.DateTo.HasValue)
-            {
-                filtered = filtered.Where(b =>
-                    _beatmapSets.TryGetValue(b.BeatmapSetId, out var set) &&
-                    IsInDateRange(set, filter.DateFrom, filter.DateTo));
-            }
-            else
-            {
-                filtered = filtered.Where(b =>
-                    _beatmapSets.TryGetValue(b.BeatmapSetId, out var set) &&
-                    IsInYearRange(set, filter.YearFrom, filter.YearTo));
-            }
+            filtered = filtered.Where(b =>
+                _beatmapSets.TryGetValue(b.BeatmapSetId, out var set) &&
+                IsInSubmitDateRange(set, filter.SubmitDateFrom, filter.SubmitDateTo));
         }
 
         // Filter by status
@@ -131,6 +122,34 @@ public class BeatmapDataService
         // Filter by mania key count
         if (filter.Modes.Count == 1 && filter.Modes.Contains(GameMode.Mania) && filter.ManiaKeyCount.HasValue)
             filtered = filtered.Where(b => b.KeyCount == filter.ManiaKeyCount.Value);
+
+        // Difficulty Rating
+        if (filter.DifficultyRatingMin.HasValue || filter.DifficultyRatingMax.HasValue)
+        {
+            filtered = filtered.Where(b =>
+                (!filter.DifficultyRatingMin.HasValue || b.DifficultyRating >= filter.DifficultyRatingMin.Value) &&
+                (!filter.DifficultyRatingMax.HasValue || b.DifficultyRating <= filter.DifficultyRatingMax.Value));
+        }
+
+        // Artist (case-insensitive contains)
+        if (!string.IsNullOrWhiteSpace(filter.Artist))
+        {
+            var artistLower = filter.Artist.Trim().ToLowerInvariant();
+            filtered = filtered.Where(b =>
+                _beatmapSets != null &&
+                _beatmapSets.TryGetValue(b.BeatmapSetId, out var set) &&
+                (set.Artist?.ToLowerInvariant().Contains(artistLower) ?? false));
+        }
+
+        // Creator (case-insensitive contains)
+        if (!string.IsNullOrWhiteSpace(filter.Creator))
+        {
+            var creatorLower = filter.Creator.Trim().ToLowerInvariant();
+            filtered = filtered.Where(b =>
+                _beatmapSets != null &&
+                _beatmapSets.TryGetValue(b.BeatmapSetId, out var set) &&
+                (set.Creator?.ToLowerInvariant().Contains(creatorLower) ?? false));
+        }
 
         return filtered.ToList();
     }
@@ -146,101 +165,107 @@ public class BeatmapDataService
         _allBeatmaps = new List<BeatmapEntry>();
         _beatmapSets = new Dictionary<int, BeatmapSetEntry>();
 
+        var beatmapDb = Path.Combine(_dataDir, "osu_beatmaps.db");
+        var beatmapSetDb = Path.Combine(_dataDir, "osu_beatmapsets.db");
+
         await Task.Run(() =>
         {
-            // Load beatmap sets first
-            var setsDb = Path.Combine(_dataDir, "osu_beatmapsets.db");
-            if (File.Exists(setsDb))
+            // Load beatmap sets
+            using var setConn = new SqliteConnection($"Data Source={beatmapSetDb};Mode=ReadOnly");
+            setConn.Open();
+
+            using var setCmd = setConn.CreateCommand();
+            setCmd.CommandText = "SELECT beatmapset_id, artist, title, creator, genre_id, language_id, approved_date, approved, has_video FROM osu_beatmapsets";
+            using var setReader = setCmd.ExecuteReader();
+
+            while (setReader.Read())
             {
-                using var conn = new SqliteConnection($"Data Source={setsDb};Mode=ReadOnly");
-                conn.Open();
+                var approvedDateStr = SafeString(setReader, 6);
+                DateTimeOffset? approvedDate = null;
+                if (!string.IsNullOrEmpty(approvedDateStr) && DateTimeOffset.TryParse(approvedDateStr, out var dt))
+                    approvedDate = dt;
 
-                using var cmd = conn.CreateCommand();
-                cmd.CommandText = "SELECT beatmapset_id, artist, title, creator, genre_id, language_id, approved, approved_date, favourite_count, play_count FROM osu_beatmapsets";
-                using var reader = cmd.ExecuteReader();
-                while (reader.Read())
+                var set = new BeatmapSetEntry
                 {
-                    var set = new BeatmapSetEntry
-                    {
-                        BeatmapSetId = reader.GetInt32(0),
-                        Artist = reader.IsDBNull(1) ? string.Empty : reader.GetString(1),
-                        Title = reader.IsDBNull(2) ? string.Empty : reader.GetString(2),
-                        Creator = reader.IsDBNull(3) ? string.Empty : reader.GetString(3),
-                        GenreId = (BeatmapGenre)(reader.IsDBNull(4) ? 0 : reader.GetInt32(4)),
-                        LanguageId = (BeatmapLanguage)(reader.IsDBNull(5) ? 0 : reader.GetInt32(5)),
-                        Approved = (BeatmapStatus)(reader.IsDBNull(6) ? 0 : reader.GetInt32(6)),
-                        FavouriteCount = reader.IsDBNull(8) ? 0 : reader.GetInt32(8),
-                        PlayCount = reader.IsDBNull(9) ? 0 : reader.GetInt32(9),
-                    };
+                    BeatmapSetId = setReader.GetInt32(0),
+                    Artist = SafeString(setReader, 1),
+                    Title = SafeString(setReader, 2),
+                    Creator = SafeString(setReader, 3),
+                    GenreId = (BeatmapGenre)setReader.GetInt32(4),
+                    LanguageId = (BeatmapLanguage)setReader.GetInt32(5),
+                    ApprovedDate = approvedDate,
+                    Approved = (BeatmapStatus)setReader.GetInt32(7),
+                    HasVideo = setReader.GetInt32(8) != 0,
+                    SubmittedDate = approvedDate, // Use approved date as fallback for submitted
+                };
 
-                    if (!reader.IsDBNull(7))
-                    {
-                        set.ApprovedDate = DateTimeOffset.Parse(reader.GetString(7));
-                        set.ReleaseYear = set.ApprovedDate.Value.Year;
-                    }
+                if (approvedDate.HasValue)
+                    set.ReleaseYear = approvedDate.Value.Year;
 
-                    _beatmapSets[set.BeatmapSetId] = set;
-                }
-                Console.WriteLine($"[BeatmapDataService] Loaded {_beatmapSets.Count} beatmap sets.");
+                _beatmapSets[set.BeatmapSetId] = set;
             }
+
+            Console.WriteLine($"[BeatmapDataService] Loaded {_beatmapSets.Count} beatmap sets.");
 
             // Load beatmaps
-            var beatmapsDb = Path.Combine(_dataDir, "osu_beatmaps.db");
-            if (File.Exists(beatmapsDb))
+            using var bmConn = new SqliteConnection($"Data Source={beatmapDb};Mode=ReadOnly");
+            bmConn.Open();
+
+            using var bmCmd = bmConn.CreateCommand();
+            bmCmd.CommandText = "SELECT beatmap_id, beatmapset_id, mode, approved, version, total_length, hit_length, last_updated, difficulty_rating, bpm FROM osu_beatmaps";
+            using var bmReader = bmCmd.ExecuteReader();
+
+            while (bmReader.Read())
             {
-                using var conn = new SqliteConnection($"Data Source={beatmapsDb};Mode=ReadOnly");
-                conn.Open();
-
-                using var cmd = conn.CreateCommand();
-                cmd.CommandText = @"
-                    SELECT beatmap_id, beatmapset_id, mode, approved, genre_id, language_id,
-                           version, total_length, hit_length, last_update, difficultyrating, bpm
-                    FROM osu_beatmaps";
-                using var reader = cmd.ExecuteReader();
-                while (reader.Read())
+                var entry = new BeatmapEntry
                 {
-                    var entry = new BeatmapEntry
-                    {
-                        BeatmapId = reader.GetInt32(0),
-                        BeatmapSetId = reader.GetInt32(1),
-                        Mode = (GameMode)(reader.IsDBNull(2) ? 0 : reader.GetInt32(2)),
-                        Approved = (BeatmapStatus)(reader.IsDBNull(3) ? 0 : reader.GetInt32(3)),
-                        GenreId = (BeatmapGenre)(reader.IsDBNull(4) ? 0 : reader.GetInt32(4)),
-                        LanguageId = (BeatmapLanguage)(reader.IsDBNull(5) ? 0 : reader.GetInt32(5)),
-                        Version = reader.IsDBNull(6) ? string.Empty : reader.GetString(6),
-                        TotalLength = reader.IsDBNull(7) ? 0 : reader.GetInt32(7),
-                        HitLength = reader.IsDBNull(8) ? 0 : reader.GetInt32(8),
-                        DifficultyRating = reader.IsDBNull(10) ? 0.0 : reader.GetDouble(10),
-                        BPM = reader.IsDBNull(11) ? 0.0 : reader.GetDouble(11),
-                    };
+                    BeatmapId = bmReader.GetInt32(0),
+                    BeatmapSetId = bmReader.GetInt32(1),
+                    Mode = (GameMode)bmReader.GetInt32(2),
+                    Approved = (BeatmapStatus)bmReader.GetInt32(3),
+                    Version = SafeString(bmReader, 4),
+                    TotalLength = bmReader.GetInt32(5),
+                    HitLength = bmReader.GetInt32(6),
+                    LastUpdate = SafeDateTime(bmReader, 7),
+                    DifficultyRating = SafeDouble(bmReader, 8),
+                    BPM = SafeDouble(bmReader, 9),
+                };
 
-                    if (!reader.IsDBNull(9))
-                    {
-                        if (DateTimeOffset.TryParse(reader.GetString(9), out var dt))
-                            entry.LastUpdate = dt;
-                    }
-
-                    if (_beatmapSets.TryGetValue(entry.BeatmapSetId, out var set))
-                    {
-                        entry.Artist = set.Artist;
-                        entry.Title = set.Title;
-                    }
-
-                    if (entry.Mode == GameMode.Mania)
-                        entry.KeyCount = ExtractManiaKeyCount(entry.Version);
-
-                    _allBeatmaps.Add(entry);
+                if (_beatmapSets.TryGetValue(entry.BeatmapSetId, out var set))
+                {
+                    entry.Artist = set.Artist;
+                    entry.Title = set.Title;
+                    entry.GenreId = set.GenreId;
+                    entry.LanguageId = set.LanguageId;
                 }
-                Console.WriteLine($"[BeatmapDataService] Loaded {_allBeatmaps.Count} beatmaps.");
+
+                // Mania key count from version string (Tester DB has no CS column)
+                if (entry.Mode == GameMode.Mania)
+                    entry.KeyCount = ExtractManiaKeyCount(entry.Version);
+
+                _allBeatmaps.Add(entry);
             }
+
+            Console.WriteLine($"[BeatmapDataService] Loaded {_allBeatmaps.Count} beatmaps.");
         });
     }
 
-    private async Task DownloadFileAsync(string url, string destPath,
-        Action<double>? progress = null, CancellationToken ct = default)
-    {
-        Console.WriteLine($"[BeatmapDataService] Downloading {url} -> {Path.GetFileName(destPath)}");
+    private static string SafeString(SqliteDataReader reader, int ordinal) =>
+        reader.IsDBNull(ordinal) ? "" : reader.GetString(ordinal);
 
+    private static double SafeDouble(SqliteDataReader reader, int ordinal) =>
+        reader.IsDBNull(ordinal) ? 0.0 : reader.GetDouble(ordinal);
+
+    private static DateTimeOffset SafeDateTime(SqliteDataReader reader, int ordinal)
+    {
+        if (reader.IsDBNull(ordinal)) return DateTimeOffset.MinValue;
+        var str = reader.GetString(ordinal);
+        return DateTimeOffset.TryParse(str, out var dt) ? dt : DateTimeOffset.MinValue;
+    }
+
+    private async Task DownloadFileAsync(string url, string destPath, Action<double>? progress, CancellationToken ct)
+    {
+        Console.WriteLine($"[BeatmapDataService] Downloading: {url}");
         using var response = await _http.GetAsync(url, HttpCompletionOption.ResponseHeadersRead, ct);
         response.EnsureSuccessStatusCode();
 
@@ -251,6 +276,7 @@ public class BeatmapDataService
         var buffer = new byte[8192];
         long totalRead = 0;
         int bytesRead;
+
         while ((bytesRead = await contentStream.ReadAsync(buffer, ct)) > 0)
         {
             await fileStream.WriteAsync(buffer.AsMemory(0, bytesRead), ct);
@@ -358,23 +384,13 @@ public class BeatmapDataService
         return null;
     }
 
-    /// <summary>
-    /// Checks if a beatmap set's approved date falls within the given date range (year-month-day).
-    /// </summary>
-    private static bool IsInDateRange(BeatmapSetEntry set, DateTimeOffset? from, DateTimeOffset? to)
+    private static bool IsInSubmitDateRange(BeatmapSetEntry set, DateTimeOffset? from, DateTimeOffset? to)
     {
-        if (!set.ApprovedDate.HasValue) return true;
-        var date = set.ApprovedDate.Value;
+        if (!set.SubmittedDate.HasValue) return true;
+        var date = set.SubmittedDate.Value;
         if (from.HasValue && date < from.Value) return false;
         if (to.HasValue && date > to.Value) return false;
         return true;
-    }
-
-    private static bool IsInYearRange(BeatmapSetEntry set, int from, int to)
-    {
-        if (!set.ApprovedDate.HasValue) return true;
-        var year = set.ApprovedDate.Value.Year;
-        return year >= from && year <= to;
     }
 
     private static bool IsStatusMatch(BeatmapStatus status, SyncFilter filter)

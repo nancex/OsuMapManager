@@ -12,6 +12,7 @@ public class BeatmapSetEntry
     public BeatmapLanguage LanguageId { get; set; }
     public int? ReleaseYear { get; set; }
     public DateTimeOffset? ApprovedDate { get; set; }
+    public DateTimeOffset? SubmittedDate { get; set; }
     public BeatmapStatus Approved { get; set; }
     public bool HasVideo { get; set; }
     public int FavouriteCount { get; set; }

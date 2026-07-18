@@ -112,9 +112,11 @@ public class OsuDataService : IDisposable
                         var md5Hash = Prop<string>(bm, "MD5Hash") ?? "";
                         var diffName = Prop<string>(bm, "DifficultyName") ?? "";
                         var status = Prop<int>(bm, "Status");
+                        var starRating = Prop<double>(bm, "StarRating");
 
                         var beatmapSet = Prop<dynamic>(bm, "BeatmapSet");
                         var beatmapSetId = beatmapSet != null ? Prop<int>(beatmapSet, "OnlineID") : 0;
+                        var dateSubmitted = beatmapSet != null ? Prop<DateTimeOffset?>(beatmapSet, "DateSubmitted") : null;
 
                         var metadata = Prop<dynamic>(bm, "Metadata");
                         var artist = metadata != null
@@ -132,18 +134,19 @@ public class OsuDataService : IDisposable
                         if (rulesetOnlineId >= 0 && Enum.IsDefined(typeof(GameMode), rulesetOnlineId))
                             mode = (GameMode)rulesetOnlineId;
 
+                        // Mania key count from BeatmapDifficulty.CircleSize
                         int? keyCount = null;
                         if (mode == GameMode.Mania)
                         {
-                            var baseDiff = Prop<dynamic>(bm, "Difficulty");
-                            if (baseDiff != null)
+                            var difficulty = Prop<dynamic>(bm, "Difficulty");
+                            if (difficulty != null)
                             {
-                                var cs = Prop<float>(baseDiff, "CircleSize");
-                                if (cs > 0) keyCount = (int)Math.Round(cs);
+                                var cs = Prop<float>(difficulty, "CircleSize");
+                                keyCount = (int)Math.Round(cs);
                             }
                         }
 
-                        list.Add(new LocalBeatmapInfo
+                        var info = new LocalBeatmapInfo
                         {
                             OnlineId = onlineId,
                             BeatmapSetId = beatmapSetId,
@@ -151,50 +154,123 @@ public class OsuDataService : IDisposable
                             KeyCount = keyCount,
                             DifficultyName = diffName,
                             Artist = artist,
-                            Title = title,
                             Creator = creator,
-                            FileSize = 0,
                             Status = (BeatmapStatus)status,
-                            BeatmapSetHash = "", MD5Hash = md5Hash,
-                            LastModified = DateTimeOffset.MinValue
-                        });
+                            StarRating = starRating,
+                            DateSubmitted = dateSubmitted,
+                            MD5Hash = md5Hash,
+                        };
 
-                        if (!string.IsNullOrEmpty(md5Hash) && !md5Map.ContainsKey(md5Hash))
+                        list.Add(info);
+
+                        if (!string.IsNullOrEmpty(md5Hash))
                             md5Map[md5Hash] = onlineId;
                     }
-                    catch (Exception ex)
+                    catch
                     {
                         parseErr++;
-                        if (parseErr <= 3)
-                            Console.WriteLine($"[OsuDataService] Parse beatmap err: {ex.Message}");
                     }
                 }
 
-                sw.Stop();
-                Console.WriteLine($"[OsuDataService] Total={total} OnlineOK={onlineOk} OnlineSkip={onlineSkip} ParseErr={parseErr} Parsed={list.Count} MD5Map={md5Map.Count} Time={sw.ElapsedMilliseconds}ms");
+                Console.WriteLine($"[OsuDataService] Parsed {list.Count} beatmaps (total={total}, ok={onlineOk}, skip={onlineSkip}, err={parseErr})");
 
-                lock (_cacheLock) { _md5ToOnlineId = md5Map; }
+                lock (_cacheLock)
+                {
+                    _cachedBeatmaps = list;
+                    _md5ToOnlineId = md5Map;
+                }
+
                 return list;
             });
 
-            lock (_cacheLock) { _cachedBeatmaps = result; }
+            sw.Stop();
+            Console.WriteLine($"[OsuDataService] Realm read took {sw.ElapsedMilliseconds}ms.");
             return result;
         }
         catch (Exception ex)
         {
-            sw.Stop();
-            Console.WriteLine($"[OsuDataService] Beatmap error after {sw.ElapsedMilliseconds}ms: {ex}");
+            Console.WriteLine($"[OsuDataService] Error: {ex}");
             return new List<LocalBeatmapInfo>();
         }
     }
 
+    /// <summary>
+    /// Count how many local BeatmapSets match a given SyncFilter.
+    /// Used for Check Status display.
+    /// </summary>
+    public async Task<int> CountLocalMatchingSetsAsync(SyncFilter filter)
+    {
+        var localBeatmaps = await GetLocalBeatmapInfoAsync();
+
+        // Apply the same filtering logic as BeatmapDataService, but on local data
+        var filtered = localBeatmaps.AsEnumerable();
+
+        // Genre (not available locally, skip)
+        // Mode
+        if (filter.Modes.Count > 0)
+            filtered = filtered.Where(b => filter.Modes.Contains(b.Mode));
+
+        // Submit date
+        if (filter.SubmitDateFrom.HasValue || filter.SubmitDateTo.HasValue)
+        {
+            filtered = filtered.Where(b =>
+                b.DateSubmitted.HasValue &&
+                (!filter.SubmitDateFrom.HasValue || b.DateSubmitted.Value >= filter.SubmitDateFrom.Value) &&
+                (!filter.SubmitDateTo.HasValue || b.DateSubmitted.Value <= filter.SubmitDateTo.Value));
+        }
+
+        // Status
+        filtered = filtered.Where(b => IsLocalStatusMatch(b.Status, filter));
+
+        // Mania key count
+        if (filter.Modes.Contains(GameMode.Mania) && filter.ManiaKeyCount.HasValue)
+            filtered = filtered.Where(b => b.KeyCount == filter.ManiaKeyCount.Value);
+
+        // Difficulty Rating
+        if (filter.DifficultyRatingMin.HasValue || filter.DifficultyRatingMax.HasValue)
+        {
+            filtered = filtered.Where(b =>
+                (!filter.DifficultyRatingMin.HasValue || b.StarRating >= filter.DifficultyRatingMin.Value) &&
+                (!filter.DifficultyRatingMax.HasValue || b.StarRating <= filter.DifficultyRatingMax.Value));
+        }
+
+        // Artist (case-insensitive contains)
+        if (!string.IsNullOrWhiteSpace(filter.Artist))
+        {
+            var artistLower = filter.Artist.Trim().ToLowerInvariant();
+            filtered = filtered.Where(b =>
+                (b.Artist?.ToLowerInvariant().Contains(artistLower) ?? false));
+        }
+
+        // Creator (case-insensitive contains)
+        if (!string.IsNullOrWhiteSpace(filter.Creator))
+        {
+            var creatorLower = filter.Creator.Trim().ToLowerInvariant();
+            filtered = filtered.Where(b =>
+                (b.Creator?.ToLowerInvariant().Contains(creatorLower) ?? false));
+        }
+
+        return filtered.Select(b => b.BeatmapSetId).Distinct().Count();
+    }
+
+    private static bool IsLocalStatusMatch(BeatmapStatus status, SyncFilter filter)
+    {
+        return status switch
+        {
+            BeatmapStatus.Ranked => filter.IncludeRanked,
+            BeatmapStatus.Approved => filter.IncludeApproved,
+            BeatmapStatus.Loved => filter.IncludeLoved,
+            BeatmapStatus.Qualified => filter.IncludeQualified,
+            _ => false
+        };
+    }
+
+
+
     public async Task<List<CollectionInfo>> GetCollectionsAsync()
     {
-        Console.WriteLine($"[OsuDataService] GetCollectionsAsync: md5Map present={_md5ToOnlineId != null}, cachedBeatmaps={_cachedBeatmaps != null}");
-
-        if (_md5ToOnlineId == null)
+        if (_cachedBeatmaps == null)
         {
-            Console.WriteLine("[OsuDataService] MD5 map missing, loading beatmaps first...");
             await GetLocalBeatmapInfoAsync();
         }
 
@@ -297,17 +373,17 @@ public class OsuDataService : IDisposable
     }
 
     public void Close()
-{
-    if (!_disposed)
     {
-        _realm?.Dispose();
-        _realm = null;
-        _opened = false;
-        Console.WriteLine("[OsuDataService] Realm closed for external write access.");
+        if (!_disposed)
+        {
+            _realm?.Dispose();
+            _realm = null;
+            _opened = false;
+            Console.WriteLine("[OsuDataService] Realm closed for external write access.");
+        }
     }
-}
 
-public void ClearCache() { lock (_cacheLock) { _cachedBeatmaps = null; _md5ToOnlineId = null; } }
+    public void ClearCache() { lock (_cacheLock) { _cachedBeatmaps = null; _md5ToOnlineId = null; } }
     public void Dispose() { if (!_disposed) { _realm?.Dispose(); _disposed = true; } }
 
     #region DynamicApi reflection helpers
@@ -326,5 +402,3 @@ public void ClearCache() { lock (_cacheLock) { _cachedBeatmaps = null; _md5ToOnl
 
     #endregion
 }
-
-

@@ -10,6 +10,7 @@ public partial class SettingsViewModel : ViewModelBase
 {
     private SettingsService? _settingsService;
     private BeatmapDataService? _beatmapDataService;
+    private bool _isLoading;
 
     // --- osu! Path ---
     [ObservableProperty]
@@ -51,6 +52,8 @@ public partial class SettingsViewModel : ViewModelBase
     {
         if (_settingsService == null) return;
 
+        _isLoading = true;
+
         var s = _settingsService.Settings;
         OsuInstallPath = s.OsuInstallPath;
         DatabasePath = s.DatabasePath;
@@ -58,8 +61,9 @@ public partial class SettingsViewModel : ViewModelBase
         UseOfficialSource = s.DownloadSource == "official";
         UseCatboyMirror = s.DownloadSource == "catboy";
 
-        // Try to create the service from the saved path
         TryOpenDatabase();
+
+        _isLoading = false;
 
         Console.WriteLine($"[SettingsViewModel] Loaded: path={OsuInstallPath}, db={DatabasePath}, threads={DownloadThreads}");
     }
@@ -78,7 +82,18 @@ public partial class SettingsViewModel : ViewModelBase
         }
     }
 
-    [RelayCommand]
+    private void AutoSave()
+    {
+        if (_isLoading || _settingsService == null) return;
+        SaveSettings();
+    }
+
+    partial void OnOsuInstallPathChanged(string value) => AutoSave();
+    partial void OnDatabasePathChanged(string value) { AutoSave(); TryOpenDatabase(); }
+    partial void OnDownloadThreadsChanged(int value) { AutoSave(); _settingsService!.Settings.DownloadThreads = value; _settingsService.Save(); }
+    partial void OnUseOfficialSourceChanged(bool value) { if (value) { _settingsService!.Settings.DownloadSource = "official"; _settingsService.Save(); } }
+    partial void OnUseCatboyMirrorChanged(bool value) { if (value) { _settingsService!.Settings.DownloadSource = "catboy"; _settingsService.Save(); } }
+
     public void SaveSettings()
     {
         if (_settingsService == null) return;

@@ -1,4 +1,4 @@
-﻿<Window xmlns="https://github.com/avaloniaui"
+<Window xmlns="https://github.com/avaloniaui"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:vm="using:OsuMapManager.ViewModels"
         xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
@@ -171,143 +171,233 @@
 
                     <!-- ============== SYNC VIEW ============== -->
                     <Grid x:Name="SyncView" IsVisible="True" ColumnDefinitions="280,*" ColumnSpacing="16">
-
+                        <!-- ===== LEFT SIDEBAR (fixed) ===== -->
                         <Border Grid.Column="0" Classes="SidebarCard" VerticalAlignment="Stretch">
-                            <Grid RowDefinitions="Auto,Auto,Auto,Auto,*">
-                                <Border Grid.Row="0" Height="120" Background="#10FFFFFF" CornerRadius="10" Margin="0,0,0,8">
-                                    <StackPanel VerticalAlignment="Center" HorizontalAlignment="Center">
-                                        <TextBlock Text="osu!" FontSize="36" FontWeight="Bold"
-                                                   Foreground="#FF6ECF" HorizontalAlignment="Center" />
-                                        <TextBlock Text="Map Manager" FontSize="12"
-                                                   Foreground="#70FFFFFF" HorizontalAlignment="Center" Margin="0,4,0,0" />
-                                    </StackPanel>
-                                </Border>
+                            <StackPanel>
+                                <!-- Local Stats -->
+                                <TextBlock Text="Local Stats" Classes="H2" />
+                                <Grid ColumnDefinitions="Auto,*" RowDefinitions="Auto,Auto" RowSpacing="6" ColumnSpacing="12" Margin="0,10,0,0">
+                                    <TextBlock Text="Beatmap Sets:" Classes="Body" />
+                                    <TextBlock Grid.Column="1" Text="{Binding SyncVm.LocalBeatmapCount}" Classes="Body" FontWeight="Bold" />
+                                    <TextBlock Grid.Row="1" Text="Total Size:" Classes="Body" />
+                                    <TextBlock Grid.Row="1" Grid.Column="1" Text="{Binding SyncVm.LocalTotalSize}" Classes="Body" FontWeight="Bold" />
+                                </Grid>
 
-                                <Button Grid.Row="1" Content="Start Sync" Classes="Primary"
-                                        HorizontalAlignment="Stretch"
-                                        Command="{Binding SyncVm.StartSyncCommand}"
-                                        IsEnabled="{Binding !SyncVm.IsSyncing}" Margin="0,0,0,12" />
+                                <!-- Start Sync Button -->
+                                <Button Content="Start Sync" Classes="Primary" Margin="0,16,0,8"
+                                        Command="{Binding SyncVm.StartSyncCommand}" />
 
-                                <Border Grid.Row="2" Background="#10FFFFFF" CornerRadius="8" Padding="14" Margin="0,0,0,12">
+                                <!-- Check Status Button -->
+                                <Button Content="Check Status" Classes="Secondary" Margin="0,0,0,8"
+                                        Command="{Binding SyncVm.CheckStatusCommand}" />
+
+                                <!-- Sync Status -->
+                                <Border Background="#15FFFFFF" CornerRadius="8" Padding="12"
+                                        IsVisible="{Binding SyncVm.IsSyncing}" Margin="0,0,0,8">
                                     <StackPanel>
-                                        <TextBlock Text="Local Stats" Classes="Body" FontWeight="SemiBold" Margin="0,0,0,6" />
-                                        <Grid ColumnDefinitions="*,Auto" Margin="0,0,0,4">
-                                            <TextBlock Text="Sets:" Classes="Muted" />
-                                            <TextBlock Grid.Column="1" Text="{Binding SyncVm.LocalBeatmapCount}"
-                                                       Classes="Body" FontWeight="Bold" Foreground="#FF6ECF" />
-                                        </Grid>
-                                        <Grid ColumnDefinitions="*,Auto">
-                                            <TextBlock Text="Size:" Classes="Muted" />
-                                            <TextBlock Grid.Column="1" Text="{Binding SyncVm.LocalTotalSize}"
-                                                       Classes="Body" FontWeight="Bold" Foreground="#FF6ECF" />
-                                        </Grid>
+                                        <TextBlock Text="{Binding SyncVm.SyncStatusText}" Classes="Body" TextWrapping="Wrap" />
+                                        <ProgressBar Value="{Binding SyncVm.SyncProgress}" Height="6" Margin="0,6,0,0"
+                                                     Minimum="0" Maximum="100" />
+                                        <TextBlock Text="{Binding SyncVm.SyncDetailText}" Classes="Muted" Margin="0,4,0,0" />
+                                        <Button Content="Cancel" Classes="Danger" Margin="0,8,0,0"
+                                                Command="{Binding SyncVm.CancelSyncCommand}" />
                                     </StackPanel>
                                 </Border>
 
-                                <Border Grid.Row="3" Background="#10FFFFFF" CornerRadius="8" Padding="14"
-                                        IsVisible="{Binding SyncVm.IsSyncing}">
+                                <!-- Sync Confirm -->
+                                <Border Background="#28FF6ECF" CornerRadius="8" Padding="12"
+                                        IsVisible="{Binding SyncVm.ShowSyncConfirm}" Margin="0,0,0,8">
                                     <StackPanel>
-                                        <TextBlock Text="{Binding SyncVm.SyncStatusText}" Classes="Body" FontWeight="SemiBold" TextWrapping="Wrap" Margin="0,0,0,8" />
-                                        <ProgressBar Value="{Binding SyncVm.SyncProgress}" Minimum="0" Maximum="100" Height="6" Margin="0,0,0,4" />
-                                        <TextBlock Text="{Binding SyncVm.SyncDetailText}" Classes="Muted" TextWrapping="Wrap" />
+                                        <TextBlock Text="{Binding SyncVm.SyncConfirmMessage}" Classes="Body" TextWrapping="Wrap" />
+                                        <StackPanel Orientation="Horizontal" Margin="0,10,0,0" Spacing="8">
+                                            <Button Content="Continue" Classes="Primary"
+                                                    Command="{Binding SyncVm.ContinueSyncCommand}" />
+                                            <Button Content="Cancel" Classes="Secondary"
+                                                    Command="{Binding SyncVm.CancelSyncCommand}" />
+                                        </StackPanel>
                                     </StackPanel>
                                 </Border>
-                            </Grid>
+
+                                <!-- Filter Statuses (Check Status results) -->
+                                <StackPanel IsVisible="{Binding SyncVm.HasFilterStatuses}" Margin="0,8,0,0">
+                                    <TextBlock Text="{Binding SyncVm.CheckStatusText}" Classes="Muted" Margin="0,0,0,6" />
+                                    <ItemsControl ItemsSource="{Binding SyncVm.FilterStatuses}">
+                                        <ItemsControl.ItemTemplate>
+                                            <DataTemplate>
+                                                <Border Background="#15FFFFFF" CornerRadius="6" Padding="8,6" Margin="0,2">
+                                                    <Grid ColumnDefinitions="*,Auto">
+                                                        <TextBlock Text="{Binding FilterName}" Classes="Body" FontWeight="SemiBold" />
+                                                        <TextBlock Grid.Column="1" Text="{Binding DisplayText}" Classes="Body" FontWeight="Bold" />
+                                                    </Grid>
+                                                </Border>
+                                            </DataTemplate>
+                                        </ItemsControl.ItemTemplate>
+                                    </ItemsControl>
+                                </StackPanel>
+                            </StackPanel>
                         </Border>
 
+                        <!-- ===== RIGHT SIDE: Big Filters (scrollable) ===== -->
                         <ScrollViewer Grid.Column="1">
                             <StackPanel>
-                                <!-- Genre Card -->
-                                <Border Classes="Card" Margin="0,0,0,16">
-                                    <StackPanel>
-                                        <TextBlock Text="Genre" Classes="H2" Margin="0,0,0,10" />
-                                        <CheckBox Content="Select All" IsChecked="{Binding SyncVm.AllGenresSelected}" Margin="0,0,0,6" />
-                                        <ItemsControl ItemsSource="{Binding SyncVm.Genres}">
-                                            <ItemsControl.ItemsPanel>
-                                                <ItemsPanelTemplate><WrapPanel /></ItemsPanelTemplate>
-                                            </ItemsControl.ItemsPanel>
-                                            <ItemsControl.ItemTemplate>
-                                                <DataTemplate x:DataType="vm:GenreItem">
-                                                    <CheckBox Content="{Binding DisplayName}" IsChecked="{Binding IsSelected}" Margin="0,0,10,6" />
-                                                </DataTemplate>
-                                            </ItemsControl.ItemTemplate>
-                                        </ItemsControl>
-                                    </StackPanel>
-                                </Border>
+                                <!-- Header -->
+                                <Grid ColumnDefinitions="*,Auto" Margin="0,0,0,12">
+                                    <TextBlock Text="Big Filters" Classes="H1" VerticalAlignment="Center" />
+                                    <Button Grid.Column="1" Content="+ Add Filter" Classes="Primary"
+                                            Command="{Binding SyncVm.AddBigFilterCommand}" />
+                                </Grid>
 
-                                <!-- Year Card -->
-                                <Border Classes="Card" Margin="0,0,0,16">
-                                    <StackPanel>
-                                        <TextBlock Text="Release Year" Classes="H2" Margin="0,0,0,10" />
-                                        <Grid ColumnDefinitions="Auto,*,Auto" ColumnSpacing="12">
-                                            <TextBlock Grid.Column="0" Text="{Binding SyncVm.YearFrom}" Classes="Body" VerticalAlignment="Center" MinWidth="40" />
-                                            <Slider Grid.Column="1" Minimum="{Binding SyncVm.MinYear}" Maximum="{Binding SyncVm.MaxYear}" Value="{Binding SyncVm.YearFrom}" />
-                                            <TextBlock Grid.Column="2" Text="{Binding SyncVm.YearTo}" Classes="Body" VerticalAlignment="Center" MinWidth="40" />
-                                        </Grid>
-                                    </StackPanel>
-                                </Border>
+                                <!-- Big Filter Cards -->
+                                <ItemsControl ItemsSource="{Binding SyncVm.BigFilters}">
+                                    <ItemsControl.ItemTemplate>
+                                        <DataTemplate>
+                                            <Border Classes="Card" Margin="0,0,0,12" Padding="16">
+                                                <StackPanel>
+                                                    <!-- Header bar -->
+                                                    <Grid ColumnDefinitions="*,Auto,Auto" Margin="0,0,0,8">
+                                                        <TextBox Text="{Binding Name}" Classes="H2" 
+                                                                 Background="Transparent" BorderThickness="0"
+                                                                 Padding="0" />
+                                                        <Button Grid.Column="1" Content="Collapse/Expand" Classes="Secondary" 
+                                                                Margin="0,0,6,0" Padding="10,4"
+                                                                Command="{Binding ToggleCollapseCommand}" />
+                                                        <Button Grid.Column="2" Content="X" Classes="Danger" 
+                                                                Padding="10,4"
+                                                                Command="{Binding $parent[ItemsControl].DataContext.SyncVm.DeleteBigFilterCommand}"
+                                                                CommandParameter="{Binding}" />
+                                                    </Grid>
 
-                                <!-- Status Card -->
-                                <Border Classes="Card" Margin="0,0,0,16">
-                                    <StackPanel>
-                                        <TextBlock Text="Status" Classes="H2" Margin="0,0,0,10" />
-                                        <WrapPanel>
-                                            <CheckBox Content="Ranked" IsChecked="{Binding SyncVm.IncludeRanked}" Margin="0,0,16,8" />
-                                            <CheckBox Content="Approved" IsChecked="{Binding SyncVm.IncludeApproved}" Margin="0,0,16,8" />
-                                            <CheckBox Content="Qualified" IsChecked="{Binding SyncVm.IncludeQualified}" Margin="0,0,16,8" />
-                                            <CheckBox Content="Loved" IsChecked="{Binding SyncVm.IncludeLoved}" Margin="0,0,16,8" />
-                                        </WrapPanel>
-                                    </StackPanel>
-                                </Border>
+                                                    <!-- Collapsible content -->
+                                                    <StackPanel IsVisible="{Binding !IsCollapsed}" Spacing="8">
 
-                                <!-- Game Mode Card -->
-                                <Border Classes="Card" Margin="0,0,0,16">
-                                    <StackPanel>
-                                        <TextBlock Text="Game Mode" Classes="H2" Margin="0,0,0,10" />
-                                        <WrapPanel>
-                                            <CheckBox Content="osu!" IsChecked="{Binding SyncVm.OsuMode}" Margin="0,0,16,8" />
-                                            <CheckBox Content="Taiko" IsChecked="{Binding SyncVm.TaikoMode}" Margin="0,0,16,8" />
-                                            <CheckBox Content="Catch" IsChecked="{Binding SyncVm.CatchMode}" Margin="0,0,16,8" />
-                                            <CheckBox Content="Mania" IsChecked="{Binding SyncVm.ManiaMode}" Margin="0,0,16,8" />
-                                        </WrapPanel>
-                                        <StackPanel IsVisible="{Binding SyncVm.IsManiaSelected}" Margin="0,4,0,0">
-                                            <TextBlock Text="Mania Key Count:" Classes="Body" Margin="0,0,0,6" />
-                                            <Grid ColumnDefinitions="Auto,Auto,*" ColumnSpacing="10">
-                                                <TextBlock Text="{Binding SyncVm.ManiaKeyCount}" Classes="Body" FontWeight="Bold" VerticalAlignment="Center" MinWidth="24" />
-                                                <Slider Grid.Column="1" Width="200" Minimum="1" Maximum="18" Value="{Binding SyncVm.ManiaKeyCount}" />
-                                            </Grid>
-                                        </StackPanel>
-                                    </StackPanel>
-                                </Border>
+                                                        <!-- Genre sub-card -->
+                                                        <Border Background="#15FFFFFF" CornerRadius="8" Padding="12">
+                                                            <StackPanel>
+                                                                <TextBlock Text="Genre" Classes="Body" FontWeight="Bold" Margin="0,0,0,6" />
+                                                                <CheckBox Content="All" IsChecked="{Binding AllGenresSelected}" Margin="0,0,0,4" />
+                                                                <ItemsControl ItemsSource="{Binding Genres}">
+                                                                    <ItemsControl.ItemsPanel>
+                                                                        <ItemsPanelTemplate>
+                                                                            <WrapPanel />
+                                                                        </ItemsPanelTemplate>
+                                                                    </ItemsControl.ItemsPanel>
+                                                                    <ItemsControl.ItemTemplate>
+                                                                        <DataTemplate>
+                                                                            <CheckBox Content="{Binding DisplayName}" IsChecked="{Binding IsSelected}" Margin="0,0,12,4" />
+                                                                        </DataTemplate>
+                                                                    </ItemsControl.ItemTemplate>
+                                                                </ItemsControl>
+                                                            </StackPanel>
+                                                        </Border>
 
-                                <!-- Confirm Dialog -->
-                                <Border Classes="Card" IsVisible="{Binding SyncVm.ShowSyncConfirm}" Background="#30FFFFFF" Margin="0,0,0,16">
-                                    <StackPanel>
-                                        <TextBlock Text="Sync Confirmation" Classes="H2" Margin="0,0,0,12" />
-                                        <TextBlock Text="{Binding SyncVm.SyncConfirmMessage}" Classes="Body" TextWrapping="Wrap" Margin="0,0,0,12" />
-                                        <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
-                                            <Button Content="Cancel" Classes="Secondary" Command="{Binding SyncVm.CancelSyncCommand}" Margin="0,0,10,0" />
-                                            <Button Content="Continue" Classes="Primary" Command="{Binding SyncVm.ContinueSyncCommand}" />
-                                        </StackPanel>
-                                    </StackPanel>
-                                </Border>
+                                                        <!-- Submit Date sub-card -->
+                                                        <Border Background="#15FFFFFF" CornerRadius="8" Padding="12">
+                                                            <StackPanel>
+                                                                <TextBlock Text="Submit Date" Classes="Body" FontWeight="Bold" Margin="0,0,0,6" />
+                                                                <Grid ColumnDefinitions="Auto,*,Auto,*" ColumnSpacing="8" RowSpacing="4">
+                                                                    <TextBlock Text="From:" VerticalAlignment="Center" Classes="Body" />
+                                                                    <DatePicker Grid.Column="1" SelectedDate="{Binding SubmitDateFrom}" />
+                                                                    <TextBlock Grid.Column="2" Text="To:" VerticalAlignment="Center" Classes="Body" />
+                                                                    <DatePicker Grid.Column="3" SelectedDate="{Binding SubmitDateTo}" />
+                                                                </Grid>
+                                                            </StackPanel>
+                                                        </Border>
 
-                                <!-- Extra Prompt -->
-                                <Border Classes="Card" IsVisible="{Binding SyncVm.ShowExtraPrompt}" Background="#15FF6B6B">
-                                    <StackPanel>
-                                        <TextBlock Text="Clean Up" Classes="H2" Margin="0,0,0,12" />
-                                        <TextBlock Text="{Binding SyncVm.ExtraPromptMessage}" Classes="Body" TextWrapping="Wrap" Margin="0,0,0,12" />
-                                        <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
-                                            <Button Content="Keep All" Classes="Secondary" Command="{Binding SyncVm.DismissExtraPromptCommand}" Margin="0,0,10,0" />
-                                            <Button Content="Delete Extra" Classes="Danger" Command="{Binding SyncVm.DeleteExtraCommand}" />
-                                        </StackPanel>
-                                    </StackPanel>
-                                </Border>
+                                                        <!-- Difficulty Rating sub-card -->
+                                                        <Border Background="#15FFFFFF" CornerRadius="8" Padding="12">
+                                                            <StackPanel>
+                                                                <TextBlock Text="Difficulty Rating" Classes="Body" FontWeight="Bold" Margin="0,0,0,6" />
+                                                                <Grid ColumnDefinitions="Auto,80,Auto,80" ColumnSpacing="8">
+                                                                    <TextBlock Text="Min:" VerticalAlignment="Center" Classes="Body" />
+                                                                    <TextBox Grid.Column="1" Text="{Binding DifficultyRatingMin, TargetNullValue=''}"
+                                                                             PlaceholderText="0.0" />
+                                                                    <TextBlock Grid.Column="2" Text="Max:" VerticalAlignment="Center" Classes="Body" />
+                                                                    <TextBox Grid.Column="3" Text="{Binding DifficultyRatingMax, TargetNullValue=''}"
+                                                                             PlaceholderText="10.0" />
+                                                                </Grid>
+                                                            </StackPanel>
+                                                        </Border>
+
+                                                        <!-- Artist / Creator sub-card -->
+                                                        <Border Background="#15FFFFFF" CornerRadius="8" Padding="12">
+                                                            <StackPanel>
+                                                                <TextBlock Text="Artist / Creator" Classes="Body" FontWeight="Bold" Margin="0,0,0,6" />
+                                                                <Grid ColumnDefinitions="Auto,*,Auto,*" ColumnSpacing="8">
+                                                                    <TextBlock Text="Artist:" VerticalAlignment="Center" Classes="Body" />
+                                                                    <TextBox Grid.Column="1" Text="{Binding Artist}" PlaceholderText="contains..." />
+                                                                    <TextBlock Grid.Column="2" Text="Creator:" VerticalAlignment="Center" Classes="Body" />
+                                                                    <TextBox Grid.Column="3" Text="{Binding Creator}" PlaceholderText="contains..." />
+                                                                </Grid>
+                                                                <TextBlock Text="Case-insensitive, partial match" Classes="Muted" Margin="0,2,0,0" />
+                                                            </StackPanel>
+                                                        </Border>
+
+                                                        <!-- Status sub-card -->
+                                                        <Border Background="#15FFFFFF" CornerRadius="8" Padding="12">
+                                                            <StackPanel>
+                                                                <TextBlock Text="Status" Classes="Body" FontWeight="Bold" Margin="0,0,0,6" />
+                                                                <WrapPanel>
+                                                                    <CheckBox Content="Ranked" IsChecked="{Binding IncludeRanked}" Margin="0,0,16,4" />
+                                                                    <CheckBox Content="Approved" IsChecked="{Binding IncludeApproved}" Margin="0,0,16,4" />
+                                                                    <CheckBox Content="Qualified" IsChecked="{Binding IncludeQualified}" Margin="0,0,16,4" />
+                                                                    <CheckBox Content="Loved" IsChecked="{Binding IncludeLoved}" />
+                                                                </WrapPanel>
+                                                            </StackPanel>
+                                                        </Border>
+
+                                                        <!-- Modes sub-card -->
+                                                        <Border Background="#15FFFFFF" CornerRadius="8" Padding="12">
+                                                            <StackPanel>
+                                                                <TextBlock Text="Modes" Classes="Body" FontWeight="Bold" Margin="0,0,0,6" />
+                                                                <WrapPanel>
+                                                                    <CheckBox Content="osu!" IsChecked="{Binding OsuMode}" Margin="0,0,16,4" />
+                                                                    <CheckBox Content="osu!taiko" IsChecked="{Binding TaikoMode}" Margin="0,0,16,4" />
+                                                                    <CheckBox Content="osu!catch" IsChecked="{Binding CatchMode}" Margin="0,0,16,4" />
+                                                                    <CheckBox Content="osu!mania" IsChecked="{Binding ManiaMode}" />
+                                                                </WrapPanel>
+                                                            </StackPanel>
+                                                        </Border>
+
+                                                        <!-- Mania Key Count sub-card -->
+                                                        <Border Background="#15FFFFFF" CornerRadius="8" Padding="12"
+                                                                IsVisible="{Binding IsManiaSelected}">
+                                                            <StackPanel>
+                                                                <TextBlock Text="Mania Key Count" Classes="Body" FontWeight="Bold" Margin="0,0,0,6" />
+                                                                <Grid ColumnDefinitions="Auto,*,Auto" ColumnSpacing="12">
+                                                                    <TextBlock Text="Keys:" VerticalAlignment="Center" Classes="Body" />
+                                                                    <Slider Grid.Column="1" Minimum="1" Maximum="18"
+                                                                            Value="{Binding ManiaKeyCount}" />
+                                                                    <TextBlock Grid.Column="2" Text="{Binding ManiaKeyCount}"
+                                                                               VerticalAlignment="Center" Classes="Body" FontWeight="Bold" MinWidth="20" />
+                                                                </Grid>
+                                                            </StackPanel>
+                                                        </Border>
+
+                                                    </StackPanel>
+                                                </StackPanel>
+                                            </Border>
+                                        </DataTemplate>
+                                    </ItemsControl.ItemTemplate>
+                                </ItemsControl>
                             </StackPanel>
                         </ScrollViewer>
-                    </Grid>
 
-                    <!-- ============== IMPORT/EXPORT VIEW ============== -->
+                        <!-- Extra prompt overlay -->
+                        <Border Grid.ColumnSpan="2" IsVisible="{Binding SyncVm.ShowExtraPrompt}"
+                                Background="#B0000000" VerticalAlignment="Stretch" HorizontalAlignment="Stretch">
+                            <Border Classes="Card" HorizontalAlignment="Center" VerticalAlignment="Center"
+                                    MaxWidth="400" Padding="24">
+                                <StackPanel>
+                                    <TextBlock Text="Extra Beatmaps Detected" Classes="H2" Margin="0,0,0,10" />
+                                    <TextBlock Text="{Binding SyncVm.ExtraPromptMessage}" Classes="Body" TextWrapping="Wrap" />
+                                    <StackPanel Orientation="Horizontal" Margin="0,16,0,0" Spacing="10">
+                                        <Button Content="Delete Extra" Classes="Danger" Command="{Binding SyncVm.DeleteExtraCommand}" />
+                                        <Button Content="Keep" Classes="Secondary" Command="{Binding SyncVm.DismissExtraPromptCommand}" />
+                                    </StackPanel>
+                                </StackPanel>
+                            </Border>
+                        </Border>
+                    </Grid>
                     <Grid x:Name="ImportExportView" IsVisible="False" ColumnDefinitions="200,*" ColumnSpacing="16">
 
                         <Border Grid.Column="0" Classes="SidebarCard" VerticalAlignment="Stretch">
@@ -441,7 +531,7 @@
                                 </StackPanel>
                             </Border>
 
-                            <Button Content="Save Settings" Classes="Primary" HorizontalAlignment="Right" Command="{Binding SettingsVm.SaveSettingsCommand}" />
+
                         </StackPanel>
                     </ScrollViewer>
                 </Grid>
@@ -450,8 +540,7 @@
 
         <!-- Status Bar -->
         <Border VerticalAlignment="Bottom" Height="28" Background="#10000000" Padding="12,0">
-            <TextBlock Text="{Binding StatusMessage}" Classes="Muted" VerticalAlignment="Center" />
+            <TextBlock Text="{Binding StatusMessage}" Foreground="{Binding StatusForeground}" FontSize="12" VerticalAlignment="Center" />
         </Border>
     </Panel>
 </Window>
-

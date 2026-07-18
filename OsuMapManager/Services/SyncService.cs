@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
@@ -37,20 +37,20 @@ public class SyncService
     }
 
     public async Task<(HashSet<int> MissingSetIds, int ExtraCount)> AnalyzeAsync(
-        SyncFilter filter, IProgress<string>? progress = null)
+        IEnumerable<SyncFilter> filters, IProgress<string>? progress = null)
     {
         progress?.Report("Loading local beatmap data...");
         var localBeatmaps = await _osuData.GetLocalBeatmapInfoAsync();
         var localSetIds = localBeatmaps.Select(b => b.BeatmapSetId).ToHashSet();
 
         progress?.Report("Loading beatmap metadata...");
-        var targetSetIds = await _beatmapData.GetFilteredBeatmapSetIdsAsync(filter);
+        var targetSetIds = await _beatmapData.GetUnionBeatmapSetIdsAsync(filters);
 
         progress?.Report("Comparing...");
         var missingSetIds = targetSetIds.Except(localSetIds).ToHashSet();
         var extraBeatmaps = localBeatmaps.Where(b => !targetSetIds.Contains(b.BeatmapSetId)).ToList();
 
-        Console.WriteLine($"[SyncService] Local sets: {localSetIds.Count}, Target: {targetSetIds.Count}, Missing: {missingSetIds.Count}, Extra: {extraBeatmaps.Count}");
+        Console.WriteLine($"[SyncService] Local sets: {localSetIds.Count}, Target (union): {targetSetIds.Count}, Missing: {missingSetIds.Count}, Extra: {extraBeatmaps.Count}");
         return (missingSetIds, extraBeatmaps.Count);
     }
 
