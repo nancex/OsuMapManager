@@ -46,6 +46,9 @@ public partial class BigFilterViewModel : ViewModelBase
     [ObservableProperty]
     public partial string Creator { get; set; } = string.Empty;
 
+    [ObservableProperty]
+    public partial string Title { get; set; } = string.Empty;
+
     // --- Status filters ---
     [ObservableProperty]
     public partial bool IncludeRanked { get; set; } = true;
@@ -154,6 +157,7 @@ public partial class BigFilterViewModel : ViewModelBase
         // Artist / Creator
         filter.Artist = Artist ?? string.Empty;
         filter.Creator = Creator ?? string.Empty;
+        filter.Title = Title ?? string.Empty;
 
         // Status
         filter.IncludeRanked = IncludeRanked;

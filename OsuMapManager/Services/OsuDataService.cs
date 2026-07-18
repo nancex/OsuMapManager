@@ -155,6 +155,7 @@ public class OsuDataService : IDisposable
                             DifficultyName = diffName,
                             Artist = artist,
                             Creator = creator,
+                            Title = title,
                             Status = (BeatmapStatus)status,
                             StarRating = starRating,
                             DateSubmitted = dateSubmitted,
@@ -242,6 +243,14 @@ public class OsuDataService : IDisposable
                 (b.Artist?.ToLowerInvariant().Contains(artistLower) ?? false));
         }
 
+
+        // Title (case-insensitive contains)
+        if (!string.IsNullOrWhiteSpace(filter.Title))
+        {
+            var titleLower = filter.Title.Trim().ToLowerInvariant();
+            filtered = filtered.Where(b =>
+                (b.Title?.ToLowerInvariant().Contains(titleLower) ?? false));
+        }
         // Creator (case-insensitive contains)
         if (!string.IsNullOrWhiteSpace(filter.Creator))
         {
@@ -401,4 +410,66 @@ public class OsuDataService : IDisposable
     }
 
     #endregion
+
+    public async Task<List<QueryBeatmapSetResult>> QueryLocalBeatmapSetsAsync(SyncFilter filter)
+    {
+        var localBeatmaps = await GetLocalBeatmapInfoAsync();
+        var filtered = localBeatmaps.AsEnumerable();
+
+        if (filter.Modes.Count > 0)
+            filtered = filtered.Where(b => filter.Modes.Contains(b.Mode));
+
+        if (filter.SubmitDateFrom.HasValue || filter.SubmitDateTo.HasValue)
+            filtered = filtered.Where(b =>
+                b.DateSubmitted.HasValue &&
+                (!filter.SubmitDateFrom.HasValue || b.DateSubmitted.Value >= filter.SubmitDateFrom.Value) &&
+                (!filter.SubmitDateTo.HasValue || b.DateSubmitted.Value <= filter.SubmitDateTo.Value));
+
+        filtered = filtered.Where(b => IsLocalStatusMatch(b.Status, filter));
+
+        if (filter.Modes.Contains(GameMode.Mania) && filter.ManiaKeyCount.HasValue)
+            filtered = filtered.Where(b => b.KeyCount == filter.ManiaKeyCount.Value);
+
+        if (filter.DifficultyRatingMin.HasValue || filter.DifficultyRatingMax.HasValue)
+            filtered = filtered.Where(b =>
+                (!filter.DifficultyRatingMin.HasValue || b.StarRating >= filter.DifficultyRatingMin.Value) &&
+                (!filter.DifficultyRatingMax.HasValue || b.StarRating <= filter.DifficultyRatingMax.Value));
+
+        if (!string.IsNullOrWhiteSpace(filter.Artist))
+        {
+            var a = filter.Artist.Trim().ToLowerInvariant();
+            filtered = filtered.Where(b => (b.Artist?.ToLowerInvariant().Contains(a) ?? false));
+        }
+        if (!string.IsNullOrWhiteSpace(filter.Creator))
+        {
+            var c = filter.Creator.Trim().ToLowerInvariant();
+            filtered = filtered.Where(b => (b.Creator?.ToLowerInvariant().Contains(c) ?? false));
+        }
+        if (!string.IsNullOrWhiteSpace(filter.Title))
+        {
+            var t = filter.Title.Trim().ToLowerInvariant();
+            filtered = filtered.Where(b => (b.Title?.ToLowerInvariant().Contains(t) ?? false));
+        }
+
+        var results = filtered
+            .GroupBy(b => b.BeatmapSetId)
+            .Select(g =>
+            {
+                var first = g.First();
+                return new QueryBeatmapSetResult
+                {
+                    Id = first.BeatmapSetId,
+                    Genre = "N/A",
+                    Title = first.Title ?? string.Empty,
+                    Artist = first.Artist ?? string.Empty,
+                    Creator = first.Creator ?? string.Empty,
+                    SubmitDate = first.DateSubmitted,
+                    BeatmapCount = g.Count()
+                };
+            })
+            .ToList();
+
+        Console.WriteLine($"[OsuDataService] QueryLocal: {results.Count} sets.");
+        return results;
+    }
 }

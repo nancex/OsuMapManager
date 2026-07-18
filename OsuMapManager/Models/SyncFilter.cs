@@ -15,6 +15,7 @@ public class SyncFilter
     public double? DifficultyRatingMax { get; set; }
     public string Artist { get; set; } = string.Empty;
     public string Creator { get; set; } = string.Empty;
+    public string Title { get; set; } = string.Empty;
     public bool IncludeRanked { get; set; } = true;
     public bool IncludeLoved { get; set; }
     public bool IncludeQualified { get; set; }

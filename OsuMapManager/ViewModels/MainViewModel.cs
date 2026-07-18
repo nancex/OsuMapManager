@@ -16,6 +16,7 @@ public partial class MainViewModel : ViewModelBase
     // Tab view models
     public SyncViewModel SyncVm { get; } = new();
     public ImportExportViewModel ImportExportVm { get; } = new();
+    public QueryViewModel QueryVm { get; } = new();
     public SettingsViewModel SettingsVm { get; } = new();
 
     [ObservableProperty]
@@ -89,6 +90,7 @@ public partial class MainViewModel : ViewModelBase
             // Wire up services to sub-viewmodels
             SyncVm.SetServices(_osuDataService, _beatmapDataService, _settingsService, this);
             ImportExportVm.SetServices(_osuDataService, _settingsService, _beatmapDataService);
+            QueryVm.SetServices(_osuDataService, _beatmapDataService);
 
             IsInitialized = true;
             StatusMessage = "Ready";

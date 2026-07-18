@@ -149,7 +149,16 @@ public class BeatmapDataService
                 (set.Artist?.ToLowerInvariant().Contains(artistLower) ?? false));
         }
 
-        // --- Creator (case-insensitive contains, checked at set level) ---
+
+        // --- Title (case-insensitive contains, checked at set level) ---
+        if (!string.IsNullOrWhiteSpace(filter.Title))
+        {
+            var titleLower = filter.Title.Trim().ToLowerInvariant();
+            filtered = filtered.Where(b =>
+                beatmapSets.TryGetValue(b.BeatmapSetId, out var set) &&
+                (set.Title?.ToLowerInvariant().Contains(titleLower) ?? false));
+        }
+        // --- Creator (case-insensitive contains), checked at set level) ---
         if (!string.IsNullOrWhiteSpace(filter.Creator))
         {
             var creatorLower = filter.Creator.Trim().ToLowerInvariant();
@@ -328,4 +337,57 @@ public class BeatmapDataService
             _ => false
         };
     }
+
+    public async Task<List<QueryBeatmapSetResult>> QueryBeatmapSetsAsync(SyncFilter filter)
+    {
+        await EnsureDataLoadedAsync();
+        if (_allBeatmaps == null || _beatmapSets == null)
+            return new List<QueryBeatmapSetResult>();
+
+        var matchedSetIds = ApplyFilterOnBeatmaps(_allBeatmaps, _beatmapSets, filter)
+            .Select(b => b.BeatmapSetId)
+            .Distinct()
+            .ToHashSet();
+
+        var beatmapCounts = _allBeatmaps
+            .Where(b => matchedSetIds.Contains(b.BeatmapSetId))
+            .GroupBy(b => b.BeatmapSetId)
+            .ToDictionary(g => g.Key, g => g.Count());
+
+        var results = new List<QueryBeatmapSetResult>();
+        foreach (var setId in matchedSetIds)
+        {
+            if (!_beatmapSets.TryGetValue(setId, out var set)) continue;
+            results.Add(new QueryBeatmapSetResult
+            {
+                Id = setId,
+                Genre = GenreDisplayName(set.GenreId),
+                Title = set.Title,
+                Artist = set.Artist,
+                Creator = set.Creator,
+                SubmitDate = set.SubmittedDate,
+                BeatmapCount = beatmapCounts.GetValueOrDefault(setId, 0)
+            });
+        }
+        return results;
+    }
+
+    private static string GenreDisplayName(BeatmapGenre genre) => genre switch
+    {
+        BeatmapGenre.Any => "Any",
+        BeatmapGenre.Unspecified => "Unspecified",
+        BeatmapGenre.VideoGame => "Video Game",
+        BeatmapGenre.Anime => "Anime",
+        BeatmapGenre.Rock => "Rock",
+        BeatmapGenre.Pop => "Pop",
+        BeatmapGenre.Other => "Other",
+        BeatmapGenre.Novelty => "Novelty",
+        BeatmapGenre.HipHop => "Hip Hop",
+        BeatmapGenre.Electronic => "Electronic",
+        BeatmapGenre.Metal => "Metal",
+        BeatmapGenre.Classical => "Classical",
+        BeatmapGenre.Folk => "Folk",
+        BeatmapGenre.Jazz => "Jazz",
+        _ => genre.ToString()
+    };
 }

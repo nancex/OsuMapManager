@@ -44,7 +44,7 @@ public partial class MainWindow : Window
 
         Console.WriteLine($"[MainWindow] Nav clicked: {tag}");
 
-        foreach (var b in new[] { NavSync, NavImportExport, NavSettings })
+        foreach (var b in new[] { NavSync, NavImportExport, NavQuery, NavSettings })
         {
             b.Classes.Remove("Selected");
             b.Classes.Add("NavButton");
@@ -53,7 +53,8 @@ public partial class MainWindow : Window
 
         SyncView.IsVisible = tag == "0";
         ImportExportView.IsVisible = tag == "1";
-        SettingsView.IsVisible = tag == "2";
+        QueryView.IsVisible = tag == "2";
+        SettingsView.IsVisible = tag == "3";
     }
 
     /// <summary>

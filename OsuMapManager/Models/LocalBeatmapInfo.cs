@@ -11,6 +11,7 @@ public class LocalBeatmapInfo
     public string DifficultyName { get; set; } = string.Empty;
     public string Artist { get; set; } = string.Empty;
     public string Creator { get; set; } = string.Empty;
+    public string Title { get; set; } = string.Empty;
     public long FileSize { get; set; }
     public BeatmapStatus Status { get; set; }
     public DateTimeOffset? DateSubmitted { get; set; }
