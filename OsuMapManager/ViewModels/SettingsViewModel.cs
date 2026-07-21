@@ -35,6 +35,10 @@ public partial class SettingsViewModel : ViewModelBase
     [ObservableProperty]
     public partial bool UseCatboyMirror { get; set; }
 
+    // --- Download path ---
+    [ObservableProperty]
+    public partial string DownloadPath { get; set; } = string.Empty;
+
     public SettingsViewModel()
     {
         Console.WriteLine("[SettingsViewModel] Created.");
@@ -60,6 +64,7 @@ public partial class SettingsViewModel : ViewModelBase
         DownloadThreads = s.DownloadThreads;
         UseOfficialSource = s.DownloadSource == "official";
         UseCatboyMirror = s.DownloadSource == "catboy";
+        DownloadPath = s.DownloadPath;
 
         TryOpenDatabase();
 
@@ -93,6 +98,7 @@ public partial class SettingsViewModel : ViewModelBase
     partial void OnDownloadThreadsChanged(int value) { AutoSave(); _settingsService!.Settings.DownloadThreads = value; _settingsService.Save(); }
     partial void OnUseOfficialSourceChanged(bool value) { if (value) { _settingsService!.Settings.DownloadSource = "official"; _settingsService.Save(); } }
     partial void OnUseCatboyMirrorChanged(bool value) { if (value) { _settingsService!.Settings.DownloadSource = "catboy"; _settingsService.Save(); } }
+    partial void OnDownloadPathChanged(string value) => AutoSave();
 
     public void SaveSettings()
     {
@@ -102,6 +108,7 @@ public partial class SettingsViewModel : ViewModelBase
         _settingsService.Settings.DatabasePath = DatabasePath;
         _settingsService.Settings.DownloadThreads = Math.Clamp(DownloadThreads, 1, 16);
         _settingsService.Settings.DownloadSource = UseCatboyMirror ? "catboy" : "official";
+        _settingsService.Settings.DownloadPath = DownloadPath;
         _settingsService.Save();
 
         Console.WriteLine("[SettingsViewModel] Settings saved.");
@@ -152,6 +159,26 @@ public partial class SettingsViewModel : ViewModelBase
             DatabasePath = files[0].Path.LocalPath;
             Console.WriteLine($"[SettingsViewModel] Selected database: {DatabasePath}");
             TryOpenDatabase();
+        }
+    }
+
+    [RelayCommand]
+    public async Task BrowseDownloadPathAsync()
+    {
+        var topLevel = GetTopLevel();
+        if (topLevel == null) return;
+
+        var folders = await topLevel.StorageProvider.OpenFolderPickerAsync(
+            new Avalonia.Platform.Storage.FolderPickerOpenOptions
+            {
+                Title = "Select download folder for beatmap .osz files",
+                AllowMultiple = false
+            });
+
+        if (folders.Count > 0)
+        {
+            DownloadPath = folders[0].Path.LocalPath;
+            Console.WriteLine($"[SettingsViewModel] Selected download path: {DownloadPath}");
         }
     }
 

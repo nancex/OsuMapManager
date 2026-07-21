@@ -187,24 +187,14 @@
 
                                 <!-- Start Sync Button -->
                                 <Button Content="Start Sync" Classes="Primary" Margin="0,16,0,8"
-                                        Command="{Binding SyncVm.StartSyncCommand}" />
+                                        Command="{Binding SyncVm.StartSyncCommand}"
+                                        IsEnabled="{Binding SyncVm.CanOperate}" />
 
                                 <!-- Check Status Button -->
                                 <Button Content="Check Status" Classes="Secondary" Margin="0,0,0,8"
-                                        Command="{Binding SyncVm.CheckStatusCommand}" />
+                                        Command="{Binding SyncVm.CheckStatusCommand}"
+                                        IsEnabled="{Binding SyncVm.CanOperate}" />
 
-                                <!-- Sync Status -->
-                                <Border Background="#15FFFFFF" CornerRadius="8" Padding="12"
-                                        IsVisible="{Binding SyncVm.IsSyncing}" Margin="0,0,0,8">
-                                    <StackPanel>
-                                        <TextBlock Text="{Binding SyncVm.SyncStatusText}" Classes="Body" TextWrapping="Wrap" />
-                                        <ProgressBar Value="{Binding SyncVm.SyncProgress}" Height="6" Margin="0,6,0,0"
-                                                     Minimum="0" Maximum="100" />
-                                        <TextBlock Text="{Binding SyncVm.SyncDetailText}" Classes="Muted" Margin="0,4,0,0" />
-                                        <Button Content="Cancel" Classes="Danger" Margin="0,8,0,0"
-                                                Command="{Binding SyncVm.CancelSyncCommand}" />
-                                    </StackPanel>
-                                </Border>
 
                                 <!-- Sync Confirm -->
                                 <Border Background="#28FF6ECF" CornerRadius="8" Padding="12"
@@ -240,7 +230,8 @@
                         </Border>
 
                         <!-- ===== RIGHT SIDE: Big Filters (scrollable) ===== -->
-                        <ScrollViewer Grid.Column="1">
+                        <ScrollViewer Grid.Column="1"
+                                     IsVisible="{Binding SyncVm.ShowBigFilters}">
                             <StackPanel>
                                 <!-- Header -->
                                 <Grid ColumnDefinitions="*,Auto" Margin="0,0,0,12">
@@ -384,18 +375,40 @@
                             </StackPanel>
                         </ScrollViewer>
 
-                        <!-- Extra prompt overlay -->
-                        <Border Grid.ColumnSpan="2" IsVisible="{Binding SyncVm.ShowExtraPrompt}"
+                        <!-- Download progress card (replaces Big Filters during download) -->
+                        <Border Grid.Column="1" Classes="Card" Padding="24"
+                                IsVisible="{Binding SyncVm.ShowDownloadCard}"
+                                VerticalAlignment="Center" HorizontalAlignment="Center"
+                                MinWidth="400" MaxWidth="500">
+                            <StackPanel Spacing="16">
+                                <TextBlock Text="Downloading Beatmaps" Classes="H1"
+                                           HorizontalAlignment="Center" />
+                                <TextBlock Classes="H2" HorizontalAlignment="Center"
+                                           Text="{Binding SyncVm.DownloadProgressText}" />
+                                <ProgressBar Value="{Binding SyncVm.SyncProgress}"
+                                             Height="12" Minimum="0" Maximum="100" />
+                                <TextBlock Text="{Binding SyncVm.SyncDetailText}" Classes="Muted"
+                                           HorizontalAlignment="Center" />
+                                <Button Content="Cancel" Classes="Danger"
+                                        Command="{Binding SyncVm.CancelSyncCommand}"
+                                        HorizontalAlignment="Center" />
+                            </StackPanel>
+                        </Border>
+
+
+                        <!-- Download complete overlay -->
+                        <Border Grid.ColumnSpan="2" IsVisible="{Binding SyncVm.ShowDownloadComplete}"
                                 Background="#B0000000" VerticalAlignment="Stretch" HorizontalAlignment="Stretch">
                             <Border Classes="Card" HorizontalAlignment="Center" VerticalAlignment="Center"
-                                    MaxWidth="400" Padding="24">
+                                    MaxWidth="450" Padding="24">
                                 <StackPanel>
-                                    <TextBlock Text="Extra Beatmaps Detected" Classes="H2" Margin="0,0,0,10" />
-                                    <TextBlock Text="{Binding SyncVm.ExtraPromptMessage}" Classes="Body" TextWrapping="Wrap" />
-                                    <StackPanel Orientation="Horizontal" Margin="0,16,0,0" Spacing="10">
-                                        <Button Content="Delete Extra" Classes="Danger" Command="{Binding SyncVm.DeleteExtraCommand}" />
-                                        <Button Content="Keep" Classes="Secondary" Command="{Binding SyncVm.DismissExtraPromptCommand}" />
-                                    </StackPanel>
+                                    <TextBlock Text="Download Complete" Classes="H1" Margin="0,0,0,12"
+                                               Foreground="#FF6ECF" />
+                                    <TextBlock Text="{Binding SyncVm.DownloadCompleteMessage}" Classes="Body"
+                                               TextWrapping="Wrap" Margin="0,0,0,16" />
+                                    <Button Content="OK" Classes="Primary"
+                                            Command="{Binding SyncVm.DismissDownloadCompleteCommand}"
+                                            HorizontalAlignment="Right" />
                                 </StackPanel>
                             </Border>
                         </Border>
@@ -671,6 +684,17 @@
                                     <Grid ColumnDefinitions="*,Auto" ColumnSpacing="10">
                                         <TextBox Text="{Binding SettingsVm.OsuInstallPath}" PlaceholderText="C:\Users\You\AppData\Local\osu" />
                                         <Button Grid.Column="1" Content="Browse..." Classes="Secondary" Command="{Binding SettingsVm.BrowseOsuPathCommand}" />
+                                    </Grid>
+                                </StackPanel>
+                            </Border>
+
+                            <Border Classes="Card" Margin="0,0,0,16">
+                                <StackPanel>
+                                    <TextBlock Text="Download Path" Classes="H2" Margin="0,0,0,10" />
+                                    <TextBlock Text="Folder where downloaded .osz files will be saved." Classes="Body" Margin="0,0,0,10" />
+                                    <Grid ColumnDefinitions="*,Auto" ColumnSpacing="10">
+                                        <TextBox Text="{Binding SettingsVm.DownloadPath}" PlaceholderText="Defaults to app directory\downloads" />
+                                        <Button Grid.Column="1" Content="Browse..." Classes="Secondary" Command="{Binding SettingsVm.BrowseDownloadPathCommand}" />
                                     </Grid>
                                 </StackPanel>
                             </Border>

@@ -243,7 +243,8 @@ public class BigFilterStatusItem : ViewModelBase
     public string FilterName { get; set; } = string.Empty;
     public int LocalCount { get; set; }
     public int DatabaseCount { get; set; }
-    public string DisplayText => $"{LocalCount} / {DatabaseCount}";
+    public int LocalDbOverlap { get; set; }
+    public string DisplayText => $"{LocalCount}  ({LocalDbOverlap}/{DatabaseCount})";
 }
 
 /// <summary>

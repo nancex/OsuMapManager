@@ -64,7 +64,7 @@ public class SyncService
         int downloaded = 0;
         int failed = 0;
 
-        var downloadDir = Path.Combine(osuPath, "downloads");
+        var downloadDir = osuPath;
         Directory.CreateDirectory(downloadDir);
 
         var threadCount = _settings.Settings.DownloadThreads;

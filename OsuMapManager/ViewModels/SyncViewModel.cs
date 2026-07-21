@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.Linq;
+using System.IO;
 using System.Threading;
 using System.Threading.Tasks;
 using CommunityToolkit.Mvvm.ComponentModel;
@@ -48,11 +49,25 @@ public partial class SyncViewModel : ViewModelBase
     [ObservableProperty]
     public partial string SyncConfirmMessage { get; set; } = string.Empty;
 
+    // --- Download progress card ---
     [ObservableProperty]
-    public partial bool ShowExtraPrompt { get; set; }
+    public partial bool ShowDownloadCard { get; set; }
 
     [ObservableProperty]
-    public partial string ExtraPromptMessage { get; set; } = string.Empty;
+    public partial string DownloadProgressText { get; set; } = string.Empty;
+
+    [ObservableProperty]
+    public partial int DownloadedCount { get; set; }
+
+    [ObservableProperty]
+    public partial int TotalDownloadCount { get; set; }
+
+    // --- Download complete dialog ---
+    [ObservableProperty]
+    public partial bool ShowDownloadComplete { get; set; }
+
+    [ObservableProperty]
+    public partial string DownloadCompleteMessage { get; set; } = string.Empty;
 
     // --- Check Status ---
     [ObservableProperty]
@@ -67,11 +82,26 @@ public partial class SyncViewModel : ViewModelBase
     public partial bool HasFilterStatuses { get; set; }
 
     /// <summary>
+    /// Whether the user can start new operations (not syncing or checking status).
+    /// </summary>
+    public bool CanOperate => !IsSyncing && !IsCheckingStatus;
+
+    /// <summary>
+    /// Whether to show Big Filters (hidden during download).
+    /// </summary>
+    public bool ShowBigFilters => !ShowDownloadCard;
+
+    partial void OnIsSyncingChanged(bool value) => OnPropertyChanged(nameof(CanOperate));
+    partial void OnIsCheckingStatusChanged(bool value) => OnPropertyChanged(nameof(CanOperate));
+    partial void OnShowDownloadCardChanged(bool value) => OnPropertyChanged(nameof(ShowBigFilters));
+
+    /// <summary>
     /// Missing set IDs currently pending download.
     /// </summary>
     private HashSet<int> _missingSetIds = new();
     private int _extraBeatmapCount;
     private int _filterCounter;
+    private DateTime _syncStartTime;
 
     public SyncViewModel()
     {
@@ -150,6 +180,7 @@ public partial class SyncViewModel : ViewModelBase
         IsCheckingStatus = true;
         CheckStatusText = "Checking...";
         FilterStatuses.Clear();
+        _osuData?.ClearCache();
 
         try
         {
@@ -164,17 +195,21 @@ public partial class SyncViewModel : ViewModelBase
 
                 CheckStatusText = $"Checking filter {i + 1}/{filters.Count}...";
 
-                var dbCount = await Task.Run(() => _beatmapData!.CountFilteredBeatmapSetsAsync(syncFilter));
-                var localCount = await _osuData!.CountLocalMatchingSetsAsync(syncFilter);
+                var dbSetIds = await Task.Run(() => _beatmapData!.GetFilteredBeatmapSetIdsAsync(syncFilter));
+                var localSetIds = await _osuData!.GetLocalMatchingSetIdsAsync(syncFilter);
+                var localCount = localSetIds.Count;
+                var dbCount = dbSetIds.Count;
+                var overlap = localSetIds.Intersect(dbSetIds).Count();
 
                 FilterStatuses.Add(new BigFilterStatusItem
                 {
                     FilterName = name,
                     LocalCount = localCount,
-                    DatabaseCount = dbCount
+                    DatabaseCount = dbCount,
+                    LocalDbOverlap = overlap
                 });
 
-                Console.WriteLine($"[SyncViewModel] CheckStatus '{name}': local={localCount}, db={dbCount}");
+                Console.WriteLine($"[SyncViewModel] CheckStatus '{name}': local={localCount}, db={dbCount}, overlap={overlap}");
             }
 
             HasFilterStatuses = FilterStatuses.Count > 0;
@@ -206,6 +241,7 @@ public partial class SyncViewModel : ViewModelBase
             SyncStatusText = "Analyzing...";
             SyncProgress = 0;
             ShowSyncConfirm = false;
+            _osuData?.ClearCache();
 
             var filters = BigFilters
                 .Select(f => f.ToSyncFilter())
@@ -247,7 +283,7 @@ public partial class SyncViewModel : ViewModelBase
         }
         finally
         {
-            IsSyncing = false;
+            if (!ShowSyncConfirm) IsSyncing = false;
         }
     }
 
@@ -261,31 +297,44 @@ public partial class SyncViewModel : ViewModelBase
 
         ShowSyncConfirm = false;
         IsSyncing = true;
+        ShowDownloadCard = true;
+        IsCheckingStatus = false;
+        _syncStartTime = DateTime.Now;
         _syncCts = new CancellationTokenSource();
 
         try
         {
+            var total = _missingSetIds.Count;
             var syncService = new SyncService(_osuData, _beatmapData, _settings);
-            var osuPath = _settings.Settings.OsuInstallPath;
+            var downloadPath = GetDownloadPath();
 
             var progress = new Progress<(int Current, int Total, int Downloaded, int Failed)>(p =>
             {
                 SyncProgress = p.Total > 0 ? (double)p.Current / p.Total * 100 : 0;
                 SyncStatusText = $"Downloading... {p.Current}/{p.Total}";
                 SyncDetailText = $"Downloaded: {p.Downloaded}, Failed: {p.Failed}";
+                DownloadedCount = p.Downloaded;
+                TotalDownloadCount = p.Total;
+                DownloadProgressText = $"{p.Downloaded}/{p.Total}";
             });
 
             var (downloaded, failed) = await syncService.DownloadMissingAsync(
-                _missingSetIds, osuPath, progress, _syncCts.Token);
+                _missingSetIds, downloadPath, progress, _syncCts.Token);
 
             SyncProgress = 100;
+            DownloadedCount = downloaded;
+            TotalDownloadCount = total;
+            DownloadProgressText = $"{downloaded}/{total}";
+            var elapsed = DateTime.Now - _syncStartTime;
             SyncStatusText = $"Complete! Downloaded: {downloaded}, Failed: {failed}";
 
-            if (_extraBeatmapCount > 0)
-            {
-                ExtraPromptMessage = $"There are {_extraBeatmapCount} extra beatmaps not matching the current filters. Remove them?";
-                ShowExtraPrompt = true;
-            }
+            DownloadCompleteMessage =
+                $"Download finished!{Environment.NewLine}{Environment.NewLine}" +
+                $"Total beatmap sets to download: {total}{Environment.NewLine}" +
+                $"Successfully downloaded: {downloaded}{Environment.NewLine}" +
+                $"Failed: {failed}{Environment.NewLine}" +
+                $"Time elapsed: {elapsed.Minutes:D2}:{elapsed.Seconds:D2}";
+            ShowDownloadComplete = true;
         }
         catch (OperationCanceledException)
         {
@@ -298,22 +347,11 @@ public partial class SyncViewModel : ViewModelBase
         }
         finally
         {
-            IsSyncing = false;
+            if (!ShowDownloadComplete) IsSyncing = false;
+            ShowDownloadCard = false;
             _syncCts?.Dispose();
             _syncCts = null;
         }
-    }
-
-    /// <summary>
-    /// Delete extra beatmaps after sync.
-    /// </summary>
-    [RelayCommand]
-    public async Task DeleteExtraAsync()
-    {
-        ShowExtraPrompt = false;
-        SyncStatusText = "Cleaning up...";
-        Console.WriteLine("[SyncViewModel] Deleting extra beatmaps...");
-        SyncStatusText = "Cleanup complete.";
     }
 
     /// <summary>
@@ -324,16 +362,35 @@ public partial class SyncViewModel : ViewModelBase
     {
         _syncCts?.Cancel();
         ShowSyncConfirm = false;
-        ShowExtraPrompt = false;
+        ShowDownloadCard = false;
+        ShowDownloadComplete = false;
+        IsSyncing = false;
     }
 
     /// <summary>
-    /// Dismiss extra prompt without deleting.
+    /// Dismiss the download complete dialog and restore UI state.
     /// </summary>
     [RelayCommand]
-    public void DismissExtraPrompt()
+    public void DismissDownloadComplete()
     {
-        ShowExtraPrompt = false;
+        ShowDownloadComplete = false;
+        ShowDownloadCard = false;
+        IsSyncing = false;
+    }
+
+    /// <summary>
+    /// Resolve the download path: use custom path from settings, or fall back
+    /// to a "downloads" subfolder in the app directory.
+    /// </summary>
+    private string GetDownloadPath()
+    {
+        var customPath = _settings?.Settings.DownloadPath;
+        if (!string.IsNullOrWhiteSpace(customPath))
+            return customPath;
+
+        var defaultPath = Path.Combine(AppContext.BaseDirectory, "downloads");
+        Directory.CreateDirectory(defaultPath);
+        return defaultPath;
     }
 
     /// <summary>
