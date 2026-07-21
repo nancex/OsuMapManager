@@ -319,7 +319,12 @@ public partial class SyncViewModel : ViewModelBase
             });
 
             var (downloaded, failed) = await syncService.DownloadMissingAsync(
-                _missingSetIds, downloadPath, progress, _syncCts.Token);
+                _missingSetIds, downloadPath, progress, _syncCts.Token,
+                onStatus: msg =>
+                {
+                    SyncStatusText = msg;
+                    SyncDetailText = msg;
+                });
 
             SyncProgress = 100;
             DownloadedCount = downloaded;
