@@ -57,6 +57,15 @@ public partial class QueryViewModel : ViewModelBase
         Console.WriteLine("[QueryViewModel] Services set.");
     }
 
+    /// <summary>
+    /// Update only the beatmap database reference.
+    /// Called when the database path changes in settings.
+    /// </summary>
+    public void UpdateDatabaseService(BeatmapDataService? db)
+    {
+        _beatmapData = db;
+    }
+
     [RelayCommand]
     public void SetLocalMode()
     {

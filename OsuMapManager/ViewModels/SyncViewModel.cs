@@ -120,6 +120,16 @@ public partial class SyncViewModel : ViewModelBase
         LoadFilterState();
     }
 
+    /// <summary>
+    /// Update only the beatmap database reference without reloading filters.
+    /// Called when the database path changes in settings.
+    /// </summary>
+    public void UpdateDatabaseService(BeatmapDataService? db)
+    {
+        _beatmapData = db;
+        Console.WriteLine("[SyncViewModel] Database service updated.");
+    }
+
     private bool ValidateServices()
     {
         if (_osuData == null || _settings == null || string.IsNullOrEmpty(_settings.Settings.OsuInstallPath))

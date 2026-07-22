@@ -1,4 +1,4 @@
-﻿#!/usr/bin/env python3
+#!/usr/bin/env python3
 """
 CatboyDataFetcher (Python)
 ===========================
@@ -18,10 +18,13 @@ import json
 import sqlite3
 import sys
 import time
+import datetime
 import os
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from dataclasses import dataclass, field
 from typing import Optional
+import threading
+from email.utils import parsedate_to_datetime
 
 # ================================================================
 # Configuration
@@ -30,10 +33,15 @@ from typing import Optional
 CATBOY_BASE = "https://catboy.best/api/v2/search"
 STATUS = 1        # Ranked
 MODE = 3          # Mania
-PAGE_SIZE = 20
-MAX_OFFSET = 100  # Test cap; use --full for unlimited
-THREAD_COUNT = 4
-OUTPUT_DB = "catboy_ranked.db"
+PAGE_SIZE = 100
+MAX_OFFSET = 10000  # Test cap; use --full for unlimited
+THREAD_COUNT = 8
+OUTPUT_DB = "catboy_ranked_mania.db"
+
+# Rate-limit pause coordination (shared across all threads)
+_rate_limit_event = threading.Event()
+_rate_limit_event.set()  # initially not paused
+_rate_limit_lock = threading.Lock()
 
 # Browser-like headers to bypass Cloudflare WAF
 HEADERS = {
@@ -162,11 +170,51 @@ def parse_beatmap(bm: dict, beatmapset_id: int) -> BeatmapData:
     )
 
 
+def _parse_retry_after(response) -> float:
+    """Parse Retry-After header. Returns seconds to wait (may be <= 0 if already past)."""
+    retry_after = response.headers.get("Retry-After", "")
+    if not retry_after:
+        return 60.0
+    try:
+        return float(retry_after)
+    except ValueError:
+        pass
+    try:
+        retry_dt = parsedate_to_datetime(retry_after)
+        delay = (retry_dt - datetime.datetime.now(datetime.timezone.utc)).total_seconds()
+        return delay
+    except Exception:
+        pass
+    return 60.0
+
+
 def fetch_page(session, offset: int, limit: int):
     """Fetch a single page. Returns (sets_list, beatmaps_list, ok_bool)."""
+    global _rate_limit_event, _rate_limit_lock
+
     url = f"{CATBOY_BASE}?status={STATUS}&limit={limit}&offset={offset}&mode={MODE}"
     try:
+        # Wait if rate-limit pause is active
+        _rate_limit_event.wait()
+
         resp = session.get(url, timeout=30)
+
+        if resp.status_code == 429:
+            if _rate_limit_lock.acquire(blocking=False):
+                try:
+                    _rate_limit_event.clear()
+                    delay = _parse_retry_after(resp)
+                    delay = max(0.0, min(delay, 300.0))
+                    print(f"  [RATELIMIT] HTTP 429 at offset={offset}. Pausing for {delay:.1f}s...")
+                    time.sleep(delay)
+                    _rate_limit_event.set()
+                    print(f"  [RATELIMIT] Pause over, resuming.")
+                finally:
+                    _rate_limit_lock.release()
+            else:
+                _rate_limit_event.wait()
+            return [], [], False
+
         if resp.status_code != 200:
             print(f"  [API] offset={offset}: HTTP {resp.status_code}")
             return [], [], False

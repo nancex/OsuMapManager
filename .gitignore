@@ -482,4 +482,4 @@ $RECYCLE.BIN/
 *.swp
 
 
-catboy_ranked.db*
+*.db*

@@ -12,6 +12,12 @@ public partial class SettingsViewModel : ViewModelBase
     private BeatmapDataService? _beatmapDataService;
     private bool _isLoading;
 
+    /// <summary>
+    /// Invoked when the beatmap database is changed or reopened.
+    /// Subscribers (e.g. QueryVm, SyncVm) should refresh their reference.
+    /// </summary>
+    public event Action<BeatmapDataService?>? DatabaseChanged;
+
     // --- osu! Path ---
     [ObservableProperty]
     public partial string OsuInstallPath { get; set; } = string.Empty;
@@ -90,6 +96,8 @@ public partial class SettingsViewModel : ViewModelBase
             _beatmapDataService = null;
             IsDatabaseReady = false;
         }
+        // Notify subscribers that the database service has changed
+        DatabaseChanged?.Invoke(_beatmapDataService);
     }
 
     private void AutoSave()

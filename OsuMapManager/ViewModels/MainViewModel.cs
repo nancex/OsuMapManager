@@ -71,6 +71,7 @@ public partial class MainViewModel : ViewModelBase
 
             // Pass settings to SettingsVm
             SettingsVm.SetSettingsService(_settingsService);
+            SettingsVm.DatabaseChanged += OnDatabaseChanged;
 
             // Get beatmap data service from settings
             _beatmapDataService = SettingsVm.GetBeatmapDataService();
@@ -144,5 +145,17 @@ public partial class MainViewModel : ViewModelBase
     {
         SyncVm.SaveFilterState();
         Console.WriteLine("[MainViewModel] All state saved.");
+    }
+
+    /// <summary>
+    /// Called when the beatmap database is changed in settings.
+    /// Refreshes all sub-viewmodels that depend on it.
+    /// </summary>
+    private void OnDatabaseChanged(BeatmapDataService? newDb)
+    {
+        _beatmapDataService = newDb;
+        SyncVm.UpdateDatabaseService(_beatmapDataService);
+        QueryVm.UpdateDatabaseService(_beatmapDataService);
+        Console.WriteLine("[MainViewModel] Database changed — sub-viewmodels refreshed.");
     }
 }
