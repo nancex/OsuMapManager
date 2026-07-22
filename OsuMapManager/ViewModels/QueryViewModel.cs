@@ -47,10 +47,13 @@ public partial class QueryViewModel : ViewModelBase
         Results = LocalResults;
     }
 
-    public void SetServices(OsuDataService? osuData, BeatmapDataService? beatmapData)
+    private SettingsService? _settings;
+
+    public void SetServices(OsuDataService? osuData, BeatmapDataService? beatmapData, SettingsService? settings = null)
     {
         _osuData = osuData;
         _beatmapData = beatmapData;
+        _settings = settings;
         Console.WriteLine("[QueryViewModel] Services set.");
     }
 
@@ -59,7 +62,6 @@ public partial class QueryViewModel : ViewModelBase
     {
         IsLocalMode = true;
         IsDatabaseMode = false;
-        Results = LocalResults;
         HasResults = LocalResults.Count > 0;
         QueryStatus = HasResults ? $"Showing {LocalResults.Count} local result(s)." : string.Empty;
     }
@@ -69,7 +71,6 @@ public partial class QueryViewModel : ViewModelBase
     {
         IsLocalMode = false;
         IsDatabaseMode = true;
-        Results = DatabaseResults;
         HasResults = DatabaseResults.Count > 0;
         QueryStatus = HasResults ? $"Showing {DatabaseResults.Count} database result(s)." : string.Empty;
     }
@@ -107,17 +108,50 @@ public partial class QueryViewModel : ViewModelBase
             var filter = QueryFilter.ToSyncFilter();
 
             // Run heavy I/O on background thread
-            var results = await Task.Run(() => _osuData!.QueryLocalBeatmapSetsAsync(filter));
+            var rawResults = await Task.Run(() => _osuData!.QueryLocalBeatmapSetsAsync(filter));
+
+            // Determine whether to cross-reference genre from Map Database
+            var enableLookup = _settings?.Settings.EnableLocalGenreLookup ?? true;
+
+            if (enableLookup && _beatmapData != null && _beatmapData.IsDataReady)
+            {
+                // Ensure DB data is loaded (lazy-load may not have triggered yet)
+                await _beatmapData.EnsureLoadedAsync();
+
+                foreach (var r in rawResults)
+                {
+                    var genre = _beatmapData.GetGenreDisplayName(r.Id);
+                    r.Genre = genre ?? "Unspecified";
+                }
+
+                // Apply genre filter if active
+                if (filter.Genres.Count > 0 && !filter.Genres.Contains(BeatmapGenre.Any))
+                {
+                    rawResults = rawResults.Where(r =>
+                    {
+                        // Map display name back to enum for comparison
+                        var g = GenreFromDisplayName(r.Genre);
+                        return filter.Genres.Contains(g);
+                    }).ToList();
+                }
+            }
+            else
+            {
+                // Genre lookup disabled — keep "N/A" and skip genre filtering
+                // (local query already doesn'"t filter by genre)
+            }
+
+            // Sort by ID
+            var sorted = rawResults.OrderBy(r => r.Id).ToList();
 
             // Clear and repopulate on UI thread
             LocalResults.Clear();
-            foreach (var r in results)
+            foreach (var r in sorted)
                 LocalResults.Add(r);
 
-            Results = LocalResults;
             HasResults = LocalResults.Count > 0;
             QueryStatus = $"Found {LocalResults.Count} beatmap set(s).";
-            Console.WriteLine($"[QueryViewModel] Local query: {LocalResults.Count} results.");
+            Console.WriteLine($"[QueryViewModel] Local query: {LocalResults.Count} results (genreLookup={enableLookup}).");
         }
         catch (Exception ex)
         {
@@ -130,6 +164,30 @@ public partial class QueryViewModel : ViewModelBase
         }
     }
 
+    /// <summary>
+    /// Map a genre display name back to the BeatmapGenre enum.
+    /// </summary>
+    private static BeatmapGenre GenreFromDisplayName(string displayName)
+    {
+        return displayName switch
+        {
+            "Unspecified" => BeatmapGenre.Unspecified,
+            "Video Game" => BeatmapGenre.VideoGame,
+            "Anime" => BeatmapGenre.Anime,
+            "Rock" => BeatmapGenre.Rock,
+            "Pop" => BeatmapGenre.Pop,
+            "Other" => BeatmapGenre.Other,
+            "Novelty" => BeatmapGenre.Novelty,
+            "Hip Hop" => BeatmapGenre.HipHop,
+            "Electronic" => BeatmapGenre.Electronic,
+            "Metal" => BeatmapGenre.Metal,
+            "Classical" => BeatmapGenre.Classical,
+            "Folk" => BeatmapGenre.Folk,
+            "Jazz" => BeatmapGenre.Jazz,
+            _ => BeatmapGenre.Any
+        };
+    }
+
     private async Task QueryDatabaseAsync()
     {
         IsQuerying = true;
@@ -139,13 +197,15 @@ public partial class QueryViewModel : ViewModelBase
         {
             var filter = QueryFilter.ToSyncFilter();
 
-            var results = await Task.Run(() => _beatmapData!.QueryBeatmapSetsAsync(filter));
+            var rawResults = await Task.Run(() => _beatmapData!.QueryBeatmapSetsAsync(filter));
+
+            // Sort by ID
+            var sorted = rawResults.OrderBy(r => r.Id).ToList();
 
             DatabaseResults.Clear();
-            foreach (var r in results)
+            foreach (var r in sorted)
                 DatabaseResults.Add(r);
 
-            Results = DatabaseResults;
             HasResults = DatabaseResults.Count > 0;
             QueryStatus = $"Found {DatabaseResults.Count} beatmap set(s).";
             Console.WriteLine($"[QueryViewModel] DB query: {DatabaseResults.Count} results.");

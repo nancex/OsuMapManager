@@ -84,31 +84,63 @@ public partial class BigFilterViewModel : ViewModelBase
 
     public BigFilterViewModel()
     {
-        // Initialize genre list
+        // Initialize genre list with change tracking
         foreach (BeatmapGenre genre in Enum.GetValues<BeatmapGenre>())
         {
             if (genre == BeatmapGenre.Any) continue;
-            Genres.Add(new GenreItem
+            var item = new GenreItem
             {
                 Genre = genre,
                 DisplayName = GenreDisplayName(genre),
                 IsSelected = true
-            });
+            };
+            item.PropertyChanged += (_, args) =>
+            {
+                if (args.PropertyName == nameof(GenreItem.IsSelected))
+                    SyncAllGenresFromItems();
+            };
+            Genres.Add(item);
+        }
+    }
+
+    private bool _updatingGenres;
+    private bool _suppressAllChanged;
+
+    /// <summary>
+    /// Toggle all genres on/off when the user clicks the All checkbox.
+    /// Suppressed during programmatic sync to avoid feedback loops.
+    /// </summary>
+    partial void OnAllGenresSelectedChanged(bool value)
+    {
+        if (_suppressAllChanged || _updatingGenres) return;
+        _updatingGenres = true;
+        try
+        {
+            foreach (var g in Genres)
+                g.IsSelected = value;
+        }
+        finally
+        {
+            _updatingGenres = false;
         }
     }
 
     /// <summary>
-    /// Toggle all genres on/off.
+    /// Update AllGenresSelected based on whether every individual genre is checked.
+    /// Uses _suppressAllChanged to avoid triggering OnAllGenresSelectedChanged.
     /// </summary>
-    partial void OnAllGenresSelectedChanged(bool value)
+    private void SyncAllGenresFromItems()
     {
-        foreach (var g in Genres)
-            g.IsSelected = value;
+        if (_updatingGenres) return;
+        var allSelected = Genres.All(g => g.IsSelected);
+        if (AllGenresSelected != allSelected)
+        {
+            _suppressAllChanged = true;
+            AllGenresSelected = allSelected;
+            _suppressAllChanged = false;
+        }
     }
 
-    /// <summary>
-    /// Update IsManiaSelected when ManiaMode changes.
-    /// </summary>
     partial void OnManiaModeChanged(bool value)
     {
         IsManiaSelected = value;

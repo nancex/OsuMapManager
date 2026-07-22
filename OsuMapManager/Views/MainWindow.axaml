@@ -634,8 +634,9 @@
                                     </ScrollViewer>
                                 </Grid>
                             </Border>
-<!-- Results table -->
-                            <Border Grid.Row="1" Classes="Card" Padding="8">
+<!-- Results table (Local) -->
+                            <Border Grid.Row="1" Classes="Card" Padding="8"
+                                    IsVisible="{Binding QueryVm.IsLocalMode}">
                                 <Grid RowDefinitions="Auto,*">
                                     <!-- Table header -->
                                     <Border Background="#18FFFFFF" CornerRadius="6" Padding="10,8" Margin="0,0,0,4">
@@ -652,7 +653,46 @@
 
                                     <!-- Results rows -->
                                     <ScrollViewer Grid.Row="1">
-                                        <ItemsControl ItemsSource="{Binding QueryVm.Results}">
+                                        <ItemsControl ItemsSource="{Binding QueryVm.LocalResults}">
+                                            <ItemsControl.ItemTemplate>
+                                                <DataTemplate>
+                                                    <Border Background="#0AFFFFFF" CornerRadius="4" Padding="10,6" Margin="0,1">
+                                                        <Grid ColumnDefinitions="60,100,*,*,100,90,70">
+                                                            <TextBlock Text="{Binding Id}" Classes="Body" Tapped="CopyCell_Tapped" />
+                                                            <TextBlock Grid.Column="1" Text="{Binding Genre}" Classes="Body" Tapped="CopyCell_Tapped" />
+                                                            <TextBlock Grid.Column="2" Text="{Binding Title}" Classes="Body" TextTrimming="CharacterEllipsis" Tapped="CopyCell_Tapped" />
+                                                            <TextBlock Grid.Column="3" Text="{Binding Artist}" Classes="Body" TextTrimming="CharacterEllipsis" Tapped="CopyCell_Tapped" />
+                                                            <TextBlock Grid.Column="4" Text="{Binding Creator}" Classes="Body" TextTrimming="CharacterEllipsis" Tapped="CopyCell_Tapped" />
+                                                            <TextBlock Grid.Column="5" Text="{Binding SubmitDateDisplay}" Classes="Muted" Tapped="CopyCell_Tapped" />
+                                                            <TextBlock Grid.Column="6" Text="{Binding BeatmapCount}" Classes="Body" FontWeight="Bold" HorizontalAlignment="Center" Tapped="CopyCell_Tapped" />
+                                                        </Grid>
+                                                    </Border>
+                                                </DataTemplate>
+                                            </ItemsControl.ItemTemplate>
+                                        </ItemsControl>
+                                    </ScrollViewer>
+                                </Grid>
+                            </Border>
+<!-- Results table (Database) -->
+                            <Border Grid.Row="1" Classes="Card" Padding="8"
+                                    IsVisible="{Binding QueryVm.IsDatabaseMode}">
+                                <Grid RowDefinitions="Auto,*">
+                                    <!-- Table header -->
+                                    <Border Background="#18FFFFFF" CornerRadius="6" Padding="10,8" Margin="0,0,0,4">
+                                        <Grid ColumnDefinitions="60,100,*,*,100,90,70">
+                                            <TextBlock Text="ID" Classes="Body" FontWeight="Bold" />
+                                            <TextBlock Grid.Column="1" Text="Genre" Classes="Body" FontWeight="Bold" />
+                                            <TextBlock Grid.Column="2" Text="Title" Classes="Body" FontWeight="Bold" />
+                                            <TextBlock Grid.Column="3" Text="Artist" Classes="Body" FontWeight="Bold" />
+                                            <TextBlock Grid.Column="4" Text="Creator" Classes="Body" FontWeight="Bold" />
+                                            <TextBlock Grid.Column="5" Text="Submit Date" Classes="Body" FontWeight="Bold" />
+                                            <TextBlock Grid.Column="6" Text="Maps" Classes="Body" FontWeight="Bold" />
+                                        </Grid>
+                                    </Border>
+
+                                    <!-- Results rows -->
+                                    <ScrollViewer Grid.Row="1">
+                                        <ItemsControl ItemsSource="{Binding QueryVm.DatabaseResults}">
                                             <ItemsControl.ItemTemplate>
                                                 <DataTemplate>
                                                     <Border Background="#0AFFFFFF" CornerRadius="4" Padding="10,6" Margin="0,1">
@@ -731,6 +771,14 @@
                                 </StackPanel>
                             </Border>
 
+                            <Border Classes="Card" Margin="0,0,0,16">
+                                <StackPanel>
+                                    <TextBlock Text="Local Query" Classes="H2" Margin="0,0,0,10" />
+                                    <TextBlock Text="When enabled, local queries cross-reference the Map Database to fill in Genre information." Classes="Body" Margin="0,0,0,10" />
+                                    <CheckBox Content="Enable genre lookup from Map Database"
+                                              IsChecked="{Binding SettingsVm.EnableLocalGenreLookup}" />
+                                </StackPanel>
+                            </Border>
 
                         </StackPanel>
                     </ScrollViewer>

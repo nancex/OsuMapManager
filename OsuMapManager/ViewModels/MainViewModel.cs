@@ -90,7 +90,7 @@ public partial class MainViewModel : ViewModelBase
             // Wire up services to sub-viewmodels
             SyncVm.SetServices(_osuDataService, _beatmapDataService, _settingsService, this);
             ImportExportVm.SetServices(_osuDataService, _settingsService, _beatmapDataService);
-            QueryVm.SetServices(_osuDataService, _beatmapDataService);
+            QueryVm.SetServices(_osuDataService, _beatmapDataService, _settingsService);
 
 
             IsInitialized = true;

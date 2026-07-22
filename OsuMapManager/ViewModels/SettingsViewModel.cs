@@ -39,6 +39,10 @@ public partial class SettingsViewModel : ViewModelBase
     [ObservableProperty]
     public partial string DownloadPath { get; set; } = string.Empty;
 
+    // --- Local genre lookup ---
+    [ObservableProperty]
+    public partial bool EnableLocalGenreLookup { get; set; } = true;
+
     public SettingsViewModel()
     {
         Console.WriteLine("[SettingsViewModel] Created.");
@@ -65,6 +69,7 @@ public partial class SettingsViewModel : ViewModelBase
         UseOfficialSource = s.DownloadSource == "official";
         UseCatboyMirror = s.DownloadSource == "catboy";
         DownloadPath = s.DownloadPath;
+        EnableLocalGenreLookup = s.EnableLocalGenreLookup;
 
         TryOpenDatabase();
 
@@ -99,6 +104,7 @@ public partial class SettingsViewModel : ViewModelBase
     partial void OnUseOfficialSourceChanged(bool value) { if (value) { _settingsService!.Settings.DownloadSource = "official"; _settingsService.Save(); } }
     partial void OnUseCatboyMirrorChanged(bool value) { if (value) { _settingsService!.Settings.DownloadSource = "catboy"; _settingsService.Save(); } }
     partial void OnDownloadPathChanged(string value) => AutoSave();
+    partial void OnEnableLocalGenreLookupChanged(bool value) => AutoSave();
 
     public void SaveSettings()
     {
@@ -109,6 +115,7 @@ public partial class SettingsViewModel : ViewModelBase
         _settingsService.Settings.DownloadThreads = Math.Clamp(DownloadThreads, 1, 16);
         _settingsService.Settings.DownloadSource = UseCatboyMirror ? "catboy" : "official";
         _settingsService.Settings.DownloadPath = DownloadPath;
+        _settingsService.Settings.EnableLocalGenreLookup = EnableLocalGenreLookup;
         _settingsService.Save();
 
         Console.WriteLine("[SettingsViewModel] Settings saved.");

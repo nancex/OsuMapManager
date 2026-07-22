@@ -372,6 +372,27 @@ public class BeatmapDataService
         return results;
     }
 
+    /// <summary>
+    /// Ensure the beatmap database is loaded into memory.
+    /// Safe to call multiple times; subsequent calls are no-ops.
+    /// </summary>
+    public async Task EnsureLoadedAsync()
+    {
+        await EnsureDataLoadedAsync();
+    }
+
+    /// <summary>
+    /// Get the display name of the genre for a given beatmap set ID.
+    /// Returns null if the set is not found or data is not loaded.
+    /// </summary>
+    public string? GetGenreDisplayName(int beatmapSetId)
+    {
+        if (_beatmapSets == null) return null;
+        if (_beatmapSets.TryGetValue(beatmapSetId, out var set))
+            return GenreDisplayName(set.GenreId);
+        return null;
+    }
+
     private static string GenreDisplayName(BeatmapGenre genre) => genre switch
     {
         BeatmapGenre.Any => "Any",
