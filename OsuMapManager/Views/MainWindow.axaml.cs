@@ -2,8 +2,6 @@ using System;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Interactivity;
-using Avalonia.Input;
-using Avalonia.Input.Platform;
 using OsuMapManager.ViewModels;
 
 namespace OsuMapManager.Views;
@@ -67,65 +65,5 @@ public partial class MainWindow : Window
         QueryView.IsVisible = tag == "2";
         SettingsView.IsVisible = tag == "3";
         AboutView.IsVisible = tag == "4";
-    }
-
-    /// <summary>
-    /// Import/Export sub-navigation handler.
-    /// </summary>
-    private void IeNav_Click(object? sender, RoutedEventArgs e)
-    {
-        if (sender is not Button btn) return;
-        if (btn.Tag is not string tag) return;
-
-        Console.WriteLine($"[MainWindow] IE nav clicked: {tag}");
-
-        foreach (var b in new[] { IeImportBtn, IeExportBtn })
-        {
-            b.Classes.Remove("Selected");
-            b.Classes.Add("NavButton");
-        }
-        btn.Classes.Add("Selected");
-
-        ImportMode.IsVisible = tag == "import";
-        ExportMode.IsVisible = tag == "export";
-    }
-
-    /// <summary>
-    /// Copy the text content of a tapped cell to clipboard.
-    /// </summary>
-    private async void CopyCell_Tapped(object? sender, TappedEventArgs e)
-    {
-        if (sender is TextBlock tb && !string.IsNullOrEmpty(tb.Text))
-        {
-            try
-            {
-                var topLevel = TopLevel.GetTopLevel(this);
-                if (topLevel?.Clipboard is { } clipboard)
-                {
-                    await clipboard.SetTextAsync(tb.Text);
-                    Console.WriteLine($"[MainWindow] Copied to clipboard: {tb.Text}");
-                }
-            }
-            catch (Exception ex)
-            {
-                Console.WriteLine($"[MainWindow] Copy failed: {ex.Message}");
-            }
-        }
-    }
-
-    private void GitHubLink_Click(object? sender, RoutedEventArgs e)
-    {
-        try
-        {
-            System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo
-            {
-                FileName = "https://github.com/nancex/OsuMapManager",
-                UseShellExecute = true
-            });
-        }
-        catch (Exception ex)
-        {
-            Console.WriteLine($"[MainWindow] Failed to open URL: {ex.Message}");
-        }
     }
 }

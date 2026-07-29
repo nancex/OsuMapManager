@@ -1,0 +1,93 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:OsuMapManager.ViewModels"
+             x:Class="OsuMapManager.Views.ImportExportViewControl"
+             x:DataType="vm:MainViewModel">
+                    <Grid x:Name="ImportExportView" IsVisible="False" ColumnDefinitions="200,*" ColumnSpacing="16">
+
+                        <Border Grid.Column="0" Classes="SidebarCard" VerticalAlignment="Stretch">
+                            <StackPanel>
+                                <Button x:Name="IeImportBtn" Content="Import" Classes="NavButton Selected" Click="IeNav_Click" Tag="import" Margin="0,0,0,6" />
+                                <Button x:Name="IeExportBtn" Content="Export" Classes="NavButton" Click="IeNav_Click" Tag="export" />
+                            </StackPanel>
+                        </Border>
+
+                        <Grid Grid.Column="1">
+                            <Grid x:Name="ImportMode" IsVisible="True" RowDefinitions="*,Auto">
+                                <Border Grid.Row="0" Classes="Card" VerticalAlignment="Top">
+                                    <StackPanel>
+                                        <TextBlock Text="Import Collections" Classes="H2" Margin="0,0,0,10" />
+                                        <TextBlock Text="Select a .txt or .zip file to import collections." Classes="Body" TextWrapping="Wrap" Margin="0,0,0,16" />
+                                        <Border Background="#10FFFFFF" CornerRadius="8" Padding="20" BorderBrush="#18FFFFFF" BorderThickness="1">
+                                            <StackPanel HorizontalAlignment="Center">
+                                                <TextBlock Text="?" FontSize="40" HorizontalAlignment="Center" Margin="0,0,0,10" />
+                                                <Button Content="Browse Files..." Classes="Secondary" Command="{Binding ImportExportVm.BrowseImportFileCommand}" Margin="0,0,0,8" />
+                                                <TextBlock Text="{Binding ImportExportVm.ImportFilePath}" Classes="Muted" TextWrapping="Wrap" MaxWidth="400" />
+                                            </StackPanel>
+                                        </Border>
+                                        <TextBlock Text="{Binding ImportExportVm.ImportStatus}" Classes="Body" TextWrapping="Wrap"
+                                                   Foreground="#FF6ECF" Margin="0,10,0,0"
+                                                   IsVisible="{Binding ImportExportVm.ImportStatus, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
+                                    </StackPanel>
+                                </Border>
+                                <Border Grid.Row="1" Padding="0,16,0,0">
+                                    <Button Content="Import" Classes="Primary" HorizontalAlignment="Right"
+                                            Command="{Binding ImportExportVm.ImportCommand}"
+                                            IsEnabled="{Binding !ImportExportVm.IsImporting}" />
+                                </Border>
+                            </Grid>
+
+                            <Grid x:Name="ExportMode" IsVisible="False" RowDefinitions="*,Auto,Auto">
+                                <Border Grid.Row="0" Classes="Card" VerticalAlignment="Stretch">
+                                    <Grid RowDefinitions="Auto,*,Auto">
+                                        <StackPanel Grid.Row="0" Margin="0,0,0,12">
+                                            <TextBlock Text="Export Collections" Classes="H2" Margin="0,0,0,6" />
+                                            <TextBlock Text="Select collections to export. Multi-select supported." Classes="Body" Margin="0,0,0,6" />
+                                            <Button Content="Refresh List" Classes="Secondary" HorizontalAlignment="Left"
+                                                    Command="{Binding ImportExportVm.LoadCollectionsCommand}" />
+                                        </StackPanel>
+                                        <ScrollViewer Grid.Row="1">
+                                            <ListBox ItemsSource="{Binding ImportExportVm.Collections}" SelectionMode="Multiple">
+                                                <ListBox.ItemTemplate>
+                                                    <DataTemplate x:DataType="vm:CollectionItem">
+                                                        <Grid ColumnDefinitions="Auto,*,Auto" ColumnSpacing="12">
+                                                            <CheckBox IsChecked="{Binding IsSelected}" VerticalAlignment="Center" />
+                                                            <TextBlock Grid.Column="1" Text="{Binding Name}" VerticalAlignment="Center" FontSize="14" Foreground="White" />
+                                                            <Border Grid.Column="2" Background="#15FFFFFF" CornerRadius="4" Padding="8,2">
+                                                                <TextBlock Text="{Binding BeatmapCount, StringFormat={}{0} maps}" Classes="Muted" />
+                                                            </Border>
+                                                        </Grid>
+                                                    </DataTemplate>
+                                                </ListBox.ItemTemplate>
+                                            </ListBox>
+                                        </ScrollViewer>
+                                        <TextBlock Grid.Row="2" Text="{Binding ImportExportVm.ExportStatus}" Classes="Body" TextWrapping="Wrap"
+                                                   Foreground="#FF6ECF" Margin="0,6,0,0" />
+                                    </Grid>
+                                </Border>
+                                <Border Grid.Row="1" Padding="0,16,0,0">
+                                    <Button Content="Export..." Classes="Primary" HorizontalAlignment="Right"
+                                            Command="{Binding ImportExportVm.ShowExportDialogCommand}"
+                                            IsEnabled="{Binding !ImportExportVm.IsExporting}" />
+                                </Border>                                 <Border Grid.Row="2" Classes="Card" IsVisible="{Binding ImportExportVm.ShowExportFormatDialog}"
+                                         Background="#30FFFFFF" Margin="0,16,0,0">
+                                     <StackPanel>
+                                         <TextBlock Text="Choose Export Format" Classes="H2" Margin="0,0,0,12" />
+                                         <TextBlock Text="Select the format for your collection export:" Classes="Body" Margin="0,0,0,16" />
+                                         <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
+                                             <Button Content="Cancel" Classes="Secondary"
+                                                     Command="{Binding ImportExportVm.CancelExportDialogCommand}"
+                                                     Margin="0,0,10,0" />
+                                             <Button Content="Export as TXT" Classes="Secondary"
+                                                     Command="{Binding ImportExportVm.ExportAsTxtCommand}"
+                                                     Margin="0,0,10,0" />
+                                             <Button Content="Export as ZIP" Classes="Primary"
+                                                     Command="{Binding ImportExportVm.ExportAsZipCommand}" />
+                                         </StackPanel>
+                                     </StackPanel>
+                                 </Border>
+                            </Grid>
+                        </Grid>
+                    </Grid>
+
+</UserControl>

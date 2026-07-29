@@ -1,0 +1,219 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:OsuMapManager.ViewModels"
+             x:Class="OsuMapManager.Views.QueryViewControl"
+             x:DataType="vm:MainViewModel">
+                    <Grid x:Name="QueryView" IsVisible="False" ColumnDefinitions="220,*" ColumnSpacing="16">
+                        <!-- ===== LEFT SIDEBAR ===== -->
+                        <Border Grid.Column="0" Classes="SidebarCard" VerticalAlignment="Stretch">
+                            <StackPanel>
+                                <TextBlock Text="Data Source" Classes="H2" Margin="0,0,0,10" />
+                                <Button Content="Local (client.realm)" Classes="NavButton"
+                                        Command="{Binding QueryVm.SetLocalModeCommand}"
+                                        IsVisible="{Binding !QueryVm.IsLocalMode}" Margin="0,0,0,4" />
+                                <Button Content="Local (client.realm)" Classes="NavButton Selected"
+                                        IsVisible="{Binding QueryVm.IsLocalMode}" Margin="0,0,0,4" />
+                                <Button Content="Map Database" Classes="NavButton"
+                                        Command="{Binding QueryVm.SetDatabaseModeCommand}"
+                                        IsVisible="{Binding !QueryVm.IsDatabaseMode}" Margin="0,0,0,4" />
+                                <Button Content="Map Database" Classes="NavButton Selected"
+                                        IsVisible="{Binding QueryVm.IsDatabaseMode}" Margin="0,0,0,4" />
+
+                                <Button Content="Query" Classes="Primary" Margin="0,24,0,8"
+                                        Command="{Binding QueryVm.ExecuteQueryCommand}" />
+
+                                <TextBlock Text="{Binding QueryVm.QueryStatus}" Classes="Muted" TextWrapping="Wrap" />
+                            </StackPanel>
+                        </Border>
+
+                        <!-- ===== RIGHT SIDE ===== -->
+                        <Grid Grid.Column="1" RowDefinitions="Auto,*">
+                            <!-- BigFilter card for query (max-height with internal scroll) -->
+                            <Border Classes="Card" Margin="0,0,0,12" Padding="16" MaxHeight="480">
+                                <Grid RowDefinitions="Auto,*">
+                                    <Grid ColumnDefinitions="*,Auto" Margin="0,0,0,8">
+                                        <TextBlock Text="Query Filter" Classes="H2" VerticalAlignment="Center" />
+                                        <Button Grid.Column="1" Content="Collapse/Expand" Classes="Secondary"
+                                                Padding="10,4"
+                                                Command="{Binding QueryVm.QueryFilter.ToggleCollapseCommand}" />
+                                    </Grid>
+                                    <ScrollViewer Grid.Row="1" IsVisible="{Binding !QueryVm.QueryFilter.IsCollapsed}">
+                                        <StackPanel Spacing="8">
+                                            <!-- Genre -->
+                                            <Border Background="#15FFFFFF" CornerRadius="8" Padding="12">
+                                                <StackPanel>
+                                                    <TextBlock Text="Genre" Classes="Body" FontWeight="Bold" Margin="0,0,0,6" />
+                                                    <CheckBox Content="All" IsChecked="{Binding QueryVm.QueryFilter.AllGenresSelected}" Margin="0,0,0,4" />
+                                                    <ItemsControl ItemsSource="{Binding QueryVm.QueryFilter.Genres}">
+                                                        <ItemsControl.ItemsPanel>
+                                                            <ItemsPanelTemplate><WrapPanel /></ItemsPanelTemplate>
+                                                        </ItemsControl.ItemsPanel>
+                                                        <ItemsControl.ItemTemplate>
+                                                            <DataTemplate>
+                                                                <CheckBox Content="{Binding DisplayName}" IsChecked="{Binding IsSelected}" Margin="0,0,12,4" />
+                                                            </DataTemplate>
+                                                        </ItemsControl.ItemTemplate>
+                                                    </ItemsControl>
+                                                </StackPanel>
+                                            </Border>
+                                            <!-- Submit Date -->
+                                            <Border Background="#15FFFFFF" CornerRadius="8" Padding="12">
+                                                <StackPanel>
+                                                    <TextBlock Text="Submit Date" Classes="Body" FontWeight="Bold" Margin="0,0,0,6" />
+                                                    <Grid ColumnDefinitions="Auto,*,Auto,*" ColumnSpacing="8">
+                                                        <TextBlock Text="From:" VerticalAlignment="Center" Classes="Body" />
+                                                        <DatePicker Grid.Column="1" SelectedDate="{Binding QueryVm.QueryFilter.SubmitDateFrom}" />
+                                                        <TextBlock Grid.Column="2" Text="To:" VerticalAlignment="Center" Classes="Body" />
+                                                        <DatePicker Grid.Column="3" SelectedDate="{Binding QueryVm.QueryFilter.SubmitDateTo}" />
+                                                    </Grid>
+                                                </StackPanel>
+                                            </Border>
+                                            <!-- Difficulty -->
+                                            <Border Background="#15FFFFFF" CornerRadius="8" Padding="12">
+                                                <StackPanel>
+                                                    <TextBlock Text="Difficulty Rating" Classes="Body" FontWeight="Bold" Margin="0,0,0,6" />
+                                                    <Grid ColumnDefinitions="Auto,80,Auto,80" ColumnSpacing="8">
+                                                        <TextBlock Text="Min:" VerticalAlignment="Center" Classes="Body" />
+                                                        <TextBox Grid.Column="1" Text="{Binding QueryVm.QueryFilter.DifficultyRatingMin, TargetNullValue=''}" PlaceholderText="0.0" />
+                                                        <TextBlock Grid.Column="2" Text="Max:" VerticalAlignment="Center" Classes="Body" />
+                                                        <TextBox Grid.Column="3" Text="{Binding QueryVm.QueryFilter.DifficultyRatingMax, TargetNullValue=''}" PlaceholderText="10.0" />
+                                                    </Grid>
+                                                </StackPanel>
+                                            </Border>
+                                            <!-- Title/Artist/Creator -->
+                                            <Border Background="#15FFFFFF" CornerRadius="8" Padding="12">
+                                                <StackPanel>
+                                                    <TextBlock Text="Title / Artist / Creator" Classes="Body" FontWeight="Bold" Margin="0,0,0,6" />
+                                                    <Grid ColumnDefinitions="Auto,*,Auto,*" RowDefinitions="Auto,Auto" ColumnSpacing="8" RowSpacing="4">
+                                                        <TextBlock Text="Title:" VerticalAlignment="Center" Classes="Body" />
+                                                        <TextBox Grid.Column="1" Text="{Binding QueryVm.QueryFilter.Title}" PlaceholderText="contains..." />
+                                                        <TextBlock Grid.Column="2" Text="Artist:" VerticalAlignment="Center" Classes="Body" />
+                                                        <TextBox Grid.Column="3" Text="{Binding QueryVm.QueryFilter.Artist}" PlaceholderText="contains..." />
+                                                        <TextBlock Grid.Row="1" Text="Creator:" VerticalAlignment="Center" Classes="Body" />
+                                                        <TextBox Grid.Row="1" Grid.Column="1" Text="{Binding QueryVm.QueryFilter.Creator}" PlaceholderText="contains..." />
+                                                    </Grid>
+                                                    <TextBlock Text="Case-insensitive, partial match" Classes="Muted" Margin="0,2,0,0" />
+                                                </StackPanel>
+                                            </Border>
+                                            <!-- Status -->
+                                            <Border Background="#15FFFFFF" CornerRadius="8" Padding="12">
+                                                <StackPanel>
+                                                    <TextBlock Text="Status" Classes="Body" FontWeight="Bold" Margin="0,0,0,6" />
+                                                    <WrapPanel>
+                                                        <CheckBox Content="Ranked" IsChecked="{Binding QueryVm.QueryFilter.IncludeRanked}" Margin="0,0,16,4" />
+                                                        <CheckBox Content="Approved" IsChecked="{Binding QueryVm.QueryFilter.IncludeApproved}" Margin="0,0,16,4" />
+                                                        <CheckBox Content="Qualified" IsChecked="{Binding QueryVm.QueryFilter.IncludeQualified}" Margin="0,0,16,4" />
+                                                        <CheckBox Content="Loved" IsChecked="{Binding QueryVm.QueryFilter.IncludeLoved}" />
+                                                    </WrapPanel>
+                                                </StackPanel>
+                                            </Border>
+                                            <!-- Modes -->
+                                            <Border Background="#15FFFFFF" CornerRadius="8" Padding="12">
+                                                <StackPanel>
+                                                    <TextBlock Text="Modes" Classes="Body" FontWeight="Bold" Margin="0,0,0,6" />
+                                                    <WrapPanel>
+                                                        <CheckBox Content="osu!" IsChecked="{Binding QueryVm.QueryFilter.OsuMode}" Margin="0,0,16,4" />
+                                                        <CheckBox Content="osu!taiko" IsChecked="{Binding QueryVm.QueryFilter.TaikoMode}" Margin="0,0,16,4" />
+                                                        <CheckBox Content="osu!catch" IsChecked="{Binding QueryVm.QueryFilter.CatchMode}" Margin="0,0,16,4" />
+                                                        <CheckBox Content="osu!mania" IsChecked="{Binding QueryVm.QueryFilter.ManiaMode}" />
+                                                    </WrapPanel>
+                                                </StackPanel>
+                                            </Border>
+                                            <!-- Mania Keys -->
+                                            <Border Background="#15FFFFFF" CornerRadius="8" Padding="12"
+                                                    IsVisible="{Binding QueryVm.QueryFilter.IsManiaSelected}">
+                                                <StackPanel>
+                                                    <TextBlock Text="Mania Key Count" Classes="Body" FontWeight="Bold" Margin="0,0,0,6" />
+                                                    <Grid ColumnDefinitions="Auto,*,Auto" ColumnSpacing="12">
+                                                        <TextBlock Text="Keys:" VerticalAlignment="Center" Classes="Body" />
+                                                        <Slider Grid.Column="1" Minimum="1" Maximum="18" Value="{Binding QueryVm.QueryFilter.ManiaKeyCount}" />
+                                                        <TextBlock Grid.Column="2" Text="{Binding QueryVm.QueryFilter.ManiaKeyCount}" VerticalAlignment="Center" Classes="Body" FontWeight="Bold" MinWidth="20" />
+                                                    </Grid>
+                                                </StackPanel>
+                                            </Border>
+                                        </StackPanel>
+                                    </ScrollViewer>
+                                </Grid>
+                            </Border>
+<!-- Results table (Local) -->
+                            <Border Grid.Row="1" Classes="Card" Padding="8"
+                                    IsVisible="{Binding QueryVm.IsLocalMode}">
+                                <Grid RowDefinitions="Auto,*">
+                                    <!-- Table header -->
+                                    <Border Background="#18FFFFFF" CornerRadius="6" Padding="10,8" Margin="0,0,0,4">
+                                        <Grid ColumnDefinitions="60,100,*,*,100,90,70">
+                                            <TextBlock Text="ID" Classes="Body" FontWeight="Bold" />
+                                            <TextBlock Grid.Column="1" Text="Genre" Classes="Body" FontWeight="Bold" />
+                                            <TextBlock Grid.Column="2" Text="Title" Classes="Body" FontWeight="Bold" />
+                                            <TextBlock Grid.Column="3" Text="Artist" Classes="Body" FontWeight="Bold" />
+                                            <TextBlock Grid.Column="4" Text="Creator" Classes="Body" FontWeight="Bold" />
+                                            <TextBlock Grid.Column="5" Text="Submit Date" Classes="Body" FontWeight="Bold" />
+                                            <TextBlock Grid.Column="6" Text="Maps" Classes="Body" FontWeight="Bold" />
+                                        </Grid>
+                                    </Border>
+
+                                    <!-- Results rows -->
+                                    <ScrollViewer Grid.Row="1">
+                                        <ItemsControl ItemsSource="{Binding QueryVm.LocalResults}">
+                                            <ItemsControl.ItemTemplate>
+                                                <DataTemplate>
+                                                    <Border Background="#0AFFFFFF" CornerRadius="4" Padding="10,6" Margin="0,1">
+                                                        <Grid ColumnDefinitions="60,100,*,*,100,90,70">
+                                                            <TextBlock Text="{Binding Id}" Classes="Body" Tapped="CopyCell_Tapped" />
+                                                            <TextBlock Grid.Column="1" Text="{Binding Genre}" Classes="Body" Tapped="CopyCell_Tapped" />
+                                                            <TextBlock Grid.Column="2" Text="{Binding Title}" Classes="Body" TextTrimming="CharacterEllipsis" Tapped="CopyCell_Tapped" />
+                                                            <TextBlock Grid.Column="3" Text="{Binding Artist}" Classes="Body" TextTrimming="CharacterEllipsis" Tapped="CopyCell_Tapped" />
+                                                            <TextBlock Grid.Column="4" Text="{Binding Creator}" Classes="Body" TextTrimming="CharacterEllipsis" Tapped="CopyCell_Tapped" />
+                                                            <TextBlock Grid.Column="5" Text="{Binding SubmitDateDisplay}" Classes="Muted" Tapped="CopyCell_Tapped" />
+                                                            <TextBlock Grid.Column="6" Text="{Binding BeatmapCount}" Classes="Body" FontWeight="Bold" HorizontalAlignment="Center" Tapped="CopyCell_Tapped" />
+                                                        </Grid>
+                                                    </Border>
+                                                </DataTemplate>
+                                            </ItemsControl.ItemTemplate>
+                                        </ItemsControl>
+                                    </ScrollViewer>
+                                </Grid>
+                            </Border>
+<!-- Results table (Database) -->
+                            <Border Grid.Row="1" Classes="Card" Padding="8"
+                                    IsVisible="{Binding QueryVm.IsDatabaseMode}">
+                                <Grid RowDefinitions="Auto,*">
+                                    <!-- Table header -->
+                                    <Border Background="#18FFFFFF" CornerRadius="6" Padding="10,8" Margin="0,0,0,4">
+                                        <Grid ColumnDefinitions="60,100,*,*,100,90,70">
+                                            <TextBlock Text="ID" Classes="Body" FontWeight="Bold" />
+                                            <TextBlock Grid.Column="1" Text="Genre" Classes="Body" FontWeight="Bold" />
+                                            <TextBlock Grid.Column="2" Text="Title" Classes="Body" FontWeight="Bold" />
+                                            <TextBlock Grid.Column="3" Text="Artist" Classes="Body" FontWeight="Bold" />
+                                            <TextBlock Grid.Column="4" Text="Creator" Classes="Body" FontWeight="Bold" />
+                                            <TextBlock Grid.Column="5" Text="Submit Date" Classes="Body" FontWeight="Bold" />
+                                            <TextBlock Grid.Column="6" Text="Maps" Classes="Body" FontWeight="Bold" />
+                                        </Grid>
+                                    </Border>
+
+                                    <!-- Results rows -->
+                                    <ScrollViewer Grid.Row="1">
+                                        <ItemsControl ItemsSource="{Binding QueryVm.DatabaseResults}">
+                                            <ItemsControl.ItemTemplate>
+                                                <DataTemplate>
+                                                    <Border Background="#0AFFFFFF" CornerRadius="4" Padding="10,6" Margin="0,1">
+                                                        <Grid ColumnDefinitions="60,100,*,*,100,90,70">
+                                                            <TextBlock Text="{Binding Id}" Classes="Body" Tapped="CopyCell_Tapped" />
+                                                            <TextBlock Grid.Column="1" Text="{Binding Genre}" Classes="Body" Tapped="CopyCell_Tapped" />
+                                                            <TextBlock Grid.Column="2" Text="{Binding Title}" Classes="Body" TextTrimming="CharacterEllipsis" Tapped="CopyCell_Tapped" />
+                                                            <TextBlock Grid.Column="3" Text="{Binding Artist}" Classes="Body" TextTrimming="CharacterEllipsis" Tapped="CopyCell_Tapped" />
+                                                            <TextBlock Grid.Column="4" Text="{Binding Creator}" Classes="Body" TextTrimming="CharacterEllipsis" Tapped="CopyCell_Tapped" />
+                                                            <TextBlock Grid.Column="5" Text="{Binding SubmitDateDisplay}" Classes="Muted" Tapped="CopyCell_Tapped" />
+                                                            <TextBlock Grid.Column="6" Text="{Binding BeatmapCount}" Classes="Body" FontWeight="Bold" HorizontalAlignment="Center" Tapped="CopyCell_Tapped" />
+                                                        </Grid>
+                                                    </Border>
+                                                </DataTemplate>
+                                            </ItemsControl.ItemTemplate>
+                                        </ItemsControl>
+                                    </ScrollViewer>
+                                </Grid>
+                            </Border>
+                        </Grid>
+                    </Grid>
+
+</UserControl>

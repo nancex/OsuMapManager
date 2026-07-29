@@ -1,0 +1,29 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:OsuMapManager.ViewModels"
+             x:Class="OsuMapManager.Views.AboutViewControl"
+             x:DataType="vm:MainViewModel">
+                    <ScrollViewer >
+                        <StackPanel MaxWidth="500">
+                            <Border Classes="Card" Margin="0,0,0,16">
+                                <StackPanel Spacing="12">
+                                    <TextBlock Text="About" Classes="H1" />
+                                    <Grid ColumnDefinitions="Auto,*" ColumnSpacing="16">
+                                        <TextBlock Text="Version" Classes="Body" FontWeight="Bold" />
+                                        <TextBlock Grid.Column="1" Text="v0.1.0" Classes="Body" />
+                                    </Grid>
+                                    <Grid ColumnDefinitions="Auto,*" ColumnSpacing="16">
+                                        <TextBlock Text="Repository" Classes="Body" FontWeight="Bold" />
+                                        <Button Grid.Column="1" Content="nancex/OsuMapManager" Click="GitHubLink_Click"
+                                                Background="Transparent" BorderThickness="0"
+                                                Foreground="#FF6ECF" FontSize="13"
+                                                Cursor="Hand" Padding="0"
+                                                HorizontalAlignment="Left"
+                                                Classes="LinkButton" />
+                                    </Grid>
+                                </StackPanel>
+                            </Border>
+                        </StackPanel>
+                    </ScrollViewer>
+</UserControl>
+
