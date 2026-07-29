@@ -23,6 +23,14 @@
                                     </Grid>
                                 </StackPanel>
                             </Border>
+
+                            <Border Classes="Card" Margin="0,0,0,16">
+                                <StackPanel Spacing="12">
+                                    <TextBlock Text="Updates" Classes="H2" />
+                                    <Button Content="Check for Updates" Classes="Secondary" Click="CheckUpdate_Click" HorizontalAlignment="Left" />
+                                    <TextBlock x:Name="UpdateStatusText" Classes="Muted" />
+                                </StackPanel>
+                            </Border>
                         </StackPanel>
                     </ScrollViewer>
 </UserControl>

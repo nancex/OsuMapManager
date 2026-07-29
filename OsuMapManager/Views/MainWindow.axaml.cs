@@ -32,8 +32,10 @@ public partial class MainWindow : Window
         {
             await vm.InitializeAsync();
         }
-    }
 
+        // Auto-check for updates silently (only shows dialog if update found)
+        await AboutView.CheckForUpdatesAsync(showNoUpdateDialog: false);
+    }
     protected override void OnClosing(WindowClosingEventArgs e)
     {
         if (DataContext is MainViewModel vm)
@@ -67,3 +69,4 @@ public partial class MainWindow : Window
         AboutView.IsVisible = tag == "4";
     }
 }
+

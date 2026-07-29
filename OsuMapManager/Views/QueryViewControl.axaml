@@ -3,7 +3,7 @@
              xmlns:vm="using:OsuMapManager.ViewModels"
              x:Class="OsuMapManager.Views.QueryViewControl"
              x:DataType="vm:MainViewModel">
-                    <Grid x:Name="QueryView" IsVisible="False" ColumnDefinitions="220,*" ColumnSpacing="16">
+                    <Grid ColumnDefinitions="220,*" ColumnSpacing="16">
                         <!-- ===== LEFT SIDEBAR ===== -->
                         <Border Grid.Column="0" Classes="SidebarCard" VerticalAlignment="Stretch">
                             <StackPanel>
@@ -217,3 +217,4 @@
                     </Grid>
 
 </UserControl>
+

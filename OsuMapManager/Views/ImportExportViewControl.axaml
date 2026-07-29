@@ -3,7 +3,7 @@
              xmlns:vm="using:OsuMapManager.ViewModels"
              x:Class="OsuMapManager.Views.ImportExportViewControl"
              x:DataType="vm:MainViewModel">
-                    <Grid x:Name="ImportExportView" IsVisible="False" ColumnDefinitions="200,*" ColumnSpacing="16">
+                    <Grid ColumnDefinitions="200,*" ColumnSpacing="16">
 
                         <Border Grid.Column="0" Classes="SidebarCard" VerticalAlignment="Stretch">
                             <StackPanel>
@@ -91,3 +91,4 @@
                     </Grid>
 
 </UserControl>
+

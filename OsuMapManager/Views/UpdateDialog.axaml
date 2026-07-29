@@ -1,0 +1,19 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        x:Class="OsuMapManager.Views.UpdateDialog"
+        Title="Update Check" Width="420" Height="200"
+        WindowStartupLocation="CenterOwner"
+        CanResize="False"
+        Background="#1a1a2e">
+
+    <Border Background="#1a1a2e" Padding="24">
+        <StackPanel Spacing="16" VerticalAlignment="Center">
+            <TextBlock x:Name="TitleText" FontSize="18" FontWeight="Bold" Foreground="White" />
+            <TextBlock x:Name="MessageText" FontSize="14" Foreground="#B0FFFFFF" TextWrapping="Wrap" />
+            <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Spacing="10">
+                <Button x:Name="OpenButton" Content="Open in Browser" Classes="Primary" Click="OpenButton_Click" IsVisible="False" />
+                <Button Content="OK" Classes="Secondary" Click="OkButton_Click" />
+            </StackPanel>
+        </StackPanel>
+    </Border>
+</Window>

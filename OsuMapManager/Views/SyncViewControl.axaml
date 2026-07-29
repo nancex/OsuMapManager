@@ -3,7 +3,7 @@
              xmlns:vm="using:OsuMapManager.ViewModels"
              x:Class="OsuMapManager.Views.SyncViewControl"
              x:DataType="vm:MainViewModel">
-                    <Grid x:Name="SyncView" IsVisible="True" ColumnDefinitions="280,*" ColumnSpacing="16">
+                    <Grid ColumnDefinitions="280,*" ColumnSpacing="16">
                         <!-- ===== LEFT SIDEBAR (fixed) ===== -->
                         <Border Grid.Column="0" Classes="SidebarCard" VerticalAlignment="Stretch">
                             <StackPanel>
@@ -245,3 +245,4 @@
                         </Border>
                     </Grid>
 </UserControl>
+
