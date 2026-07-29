@@ -143,6 +143,10 @@
         <Style Selector="ListBoxItem:selected">
             <Setter Property="Background" Value="#20FFFFFF" />
         </Style>
+        <Style Selector="Button.LinkButton:pointerover">
+            <Setter Property="Foreground" Value="#FF8DFF" />
+        </Style>
+
     
         </Window.Styles>
 
@@ -163,9 +167,10 @@
                         BorderThickness="1" CornerRadius="10">
                     <StackPanel Orientation="Horizontal">
                         <Button x:Name="NavSync" Content="Sync" Classes="NavButton Selected" Click="Nav_Click" Tag="0" Margin="0,0,4,0" />
-                        <Button x:Name="NavImportExport" Content="Import / Export" Classes="NavButton" Click="Nav_Click" Tag="1" Margin="0,0,4,0" />
+                        <Button x:Name="NavImportExport" Content="Import / Export" Classes="NavButton" Tag="1" Margin="0,0,4,0" IsEnabled="False" />
                         <Button x:Name="NavQuery" Content="Query" Classes="NavButton" Click="Nav_Click" Tag="2" Margin="0,0,4,0" />
                         <Button x:Name="NavSettings" Content="Settings" Classes="NavButton" Click="Nav_Click" Tag="3" />
+                        <Button x:Name="NavAbout" Content="About" Classes="NavButton" Click="Nav_Click" Tag="4" Margin="4,0,0,0" />
                     </StackPanel>
                 </Border>
 
@@ -745,7 +750,7 @@
                                     <TextBlock Text="Number of concurrent download threads." Classes="Body" Margin="0,0,0,10" />
                                     <Grid ColumnDefinitions="Auto,*,Auto" ColumnSpacing="12">
                                         <TextBlock Text="{Binding SettingsVm.DownloadThreads}" Classes="Body" FontWeight="Bold" VerticalAlignment="Center" MinWidth="24" />
-                                        <Slider Grid.Column="1" Width="200" Minimum="1" Maximum="16" Value="{Binding SettingsVm.DownloadThreads}" />
+                                        <Slider Grid.Column="1" Width="200" Minimum="1" Maximum="8" Value="{Binding SettingsVm.DownloadThreads}" />
                                     </Grid>
                                 </StackPanel>
                             </Border>
@@ -782,6 +787,28 @@
 
                         </StackPanel>
                     </ScrollViewer>
+                    <ScrollViewer x:Name="AboutView" IsVisible="False">
+                        <StackPanel MaxWidth="500">
+                            <Border Classes="Card" Margin="0,0,0,16">
+                                <StackPanel Spacing="12">
+                                    <TextBlock Text="About" Classes="H1" />
+                                    <Grid ColumnDefinitions="Auto,*" ColumnSpacing="16">
+                                        <TextBlock Text="Version" Classes="Body" FontWeight="Bold" />
+                                        <TextBlock Grid.Column="1" Text="v0.1.0" Classes="Body" />
+                                    </Grid>
+                                    <Grid ColumnDefinitions="Auto,*" ColumnSpacing="16">
+                                        <TextBlock Text="Repository" Classes="Body" FontWeight="Bold" />
+                                        <Button Grid.Column="1" Content="nancex/OsuMapManager" Click="GitHubLink_Click"
+                                                Background="Transparent" BorderThickness="0"
+                                                Foreground="#FF6ECF" FontSize="13"
+                                                Cursor="Hand" Padding="0"
+                                                HorizontalAlignment="Left"
+                                                Classes="LinkButton" />
+                                    </Grid>
+                                </StackPanel>
+                            </Border>
+                        </StackPanel>
+                    </ScrollViewer>
                 </Grid>
             </Grid>
         
@@ -792,3 +819,7 @@
         </Border>
     </Panel>
 </Window>
+
+
+
+

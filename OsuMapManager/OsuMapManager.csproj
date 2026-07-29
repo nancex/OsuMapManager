@@ -6,7 +6,9 @@
     <SelfContained>true</SelfContained>
 
     <!-- Disable single-file: Realm and SkiaSharp native libs are incompatible -->
-    <PublishSingleFile>false</PublishSingleFile>
+    <PublishSingleFile>true</PublishSingleFile>
+    <IncludeNativeLibrariesForSelfExtract>true</IncludeNativeLibrariesForSelfExtract>
+    <PublishTrimmed>false</PublishTrimmed>
 
     <!-- Keep trimming off for Realm reflection -->
     <PublishTrimmed>false</PublishTrimmed>

@@ -55,7 +55,7 @@ public partial class MainWindow : Window
 
         Console.WriteLine($"[MainWindow] Nav clicked: {tag}");
 
-        foreach (var b in new[] { NavSync, NavImportExport, NavQuery, NavSettings })
+        foreach (var b in new[] { NavSync, NavImportExport, NavQuery, NavSettings, NavAbout })
         {
             b.Classes.Remove("Selected");
             b.Classes.Add("NavButton");
@@ -66,6 +66,7 @@ public partial class MainWindow : Window
         ImportExportView.IsVisible = tag == "1";
         QueryView.IsVisible = tag == "2";
         SettingsView.IsVisible = tag == "3";
+        AboutView.IsVisible = tag == "4";
     }
 
     /// <summary>
@@ -112,4 +113,19 @@ public partial class MainWindow : Window
         }
     }
 
+    private void GitHubLink_Click(object? sender, RoutedEventArgs e)
+    {
+        try
+        {
+            System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo
+            {
+                FileName = "https://github.com/nancex/OsuMapManager",
+                UseShellExecute = true
+            });
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"[MainWindow] Failed to open URL: {ex.Message}");
+        }
+    }
 }
