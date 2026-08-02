@@ -10,8 +10,8 @@ An osu! lazer beatmap management tool — sync your local library against a beat
 
 ## Requirements
 
-- **Windows x64**
-- **.NET 10 Runtime** (for the lightweight release; the self-contained release includes it)
+- **Windows x64** (Linux x64 and macOS also supported — build from source)
+- **.NET 10 SDK** (to build from source) or **.NET 10 Runtime** (for the framework-dependent release)
 
 Two release variants are provided:
 
@@ -23,10 +23,16 @@ Two release variants are provided:
 ## Build from Source
 
 ```bash
+# Windows (default)
 dotnet publish OsuMapManager/OsuMapManager.csproj -c Release
+
+# Linux
+dotnet publish OsuMapManager/OsuMapManager.csproj -c Release -r linux-x64
+
+# macOS
+dotnet publish OsuMapManager/OsuMapManager.csproj -c Release -r osx-x64
 ```
 
 ## Tech Stack
 
 Avalonia UI · Realm · CommunityToolkit.Mvvm · catboy.best mirror
-

@@ -1,13 +1,20 @@
 <Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup>
     <TargetFramework>net10.0</TargetFramework>
-    <OutputType>WinExe</OutputType>
-    <RuntimeIdentifier>win-x64</RuntimeIdentifier>
+
+    <!-- OutputType: WinExe on Windows, Exe on Linux/macOS -->
+    <OutputType Condition="$([MSBuild]::IsOSPlatform('Windows'))">WinExe</OutputType>
+    <OutputType Condition="!$([MSBuild]::IsOSPlatform('Windows'))">Exe</OutputType>
+
+    <!-- RuntimeIdentifier: specify at build time, e.g. -r win-x64 / -r linux-x64 -->
+    <!-- Defaults to win-x64 for backward compatibility -->
+    <RuntimeIdentifier Condition="'$(RuntimeIdentifier)' == ''">win-x64</RuntimeIdentifier>
+
     <SelfContained>true</SelfContained>
 
     <!-- Disable single-file: Realm and SkiaSharp native libs are incompatible -->
     <PublishSingleFile>true</PublishSingleFile>
-    <IncludeNativeLibrariesForSelfExtract>true</IncludeNativeLibrariesForSelfExtract>
+    <IncludeNativeLibrariesForSelfExtract Condition="$([MSBuild]::IsOSPlatform('Windows'))">true</IncludeNativeLibrariesForSelfExtract>
     <PublishTrimmed>false</PublishTrimmed>
 
     <!-- Keep trimming off for Realm reflection -->
@@ -16,7 +23,7 @@
     <DebugType>none</DebugType>
     <CopyOutputSymbolsToPublishDirectory>false</CopyOutputSymbolsToPublishDirectory>
     <Nullable>enable</Nullable>
-    <BuiltInComInteropSupport>true</BuiltInComInteropSupport>
+    <BuiltInComInteropSupport Condition="$([MSBuild]::IsOSPlatform('Windows'))">true</BuiltInComInteropSupport>
     <AvaloniaBuildServicesEnabled>false</AvaloniaBuildServicesEnabled>
   </PropertyGroup>
 
@@ -41,11 +48,20 @@
     <PackageReference Include="SharpZipLib" Version="1.4.2" />
   </ItemGroup>
 
-  <!-- Ensure Realm native libraries are copied to publish output -->
+  <!-- Copy Realm native libraries for the target platform -->
   <Target Name="CopyRealmNativeLibs" AfterTargets="Publish">
-    <ItemGroup>
-      <RealmNativeFiles Include="$(PublishDir)runtimes\win-x64\native\realm.dll" />
-      <RealmNativeFiles Include="$(PublishDir)runtimes\win-x64\native\librealm.dll" />
+    <!-- Windows -->
+    <ItemGroup Condition="$(RuntimeIdentifier.StartsWith('win'))">
+      <RealmNativeFiles Include="$(PublishDir)runtimes\$(RuntimeIdentifier)\native\realm.dll" />
+      <RealmNativeFiles Include="$(PublishDir)runtimes\$(RuntimeIdentifier)\native\librealm.dll" />
+    </ItemGroup>
+    <!-- Linux -->
+    <ItemGroup Condition="$(RuntimeIdentifier.StartsWith('linux'))">
+      <RealmNativeFiles Include="$(PublishDir)runtimes\$(RuntimeIdentifier)\native\librealm.so" />
+    </ItemGroup>
+    <!-- macOS -->
+    <ItemGroup Condition="$(RuntimeIdentifier.StartsWith('osx'))">
+      <RealmNativeFiles Include="$(PublishDir)runtimes\$(RuntimeIdentifier)\native\librealm.dylib" />
     </ItemGroup>
     <Copy SourceFiles="@(RealmNativeFiles)"
           DestinationFolder="$(PublishDir)"

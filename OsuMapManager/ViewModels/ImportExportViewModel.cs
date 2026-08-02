@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.Linq;
+using System.Threading;
 using System.Threading.Tasks;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
@@ -14,13 +15,14 @@ public partial class ImportExportViewModel : ViewModelBase
 {
     private OsuDataService? _osuData;
     private SettingsService? _settings;
-    private BeatmapDataService? _beatmapData;
+    private SyncService? _syncService;
+    private CancellationTokenSource? _syncCts;
 
     // --- Tab navigation ---
     [ObservableProperty]
     public partial bool IsImportMode { get; set; } = true;
 
-    // --- Import ---
+    // --- Import: file ---
     [ObservableProperty]
     public partial string ImportFilePath { get; set; } = string.Empty;
 
@@ -28,7 +30,39 @@ public partial class ImportExportViewModel : ViewModelBase
     public partial string ImportStatus { get; set; } = string.Empty;
 
     [ObservableProperty]
-    public partial bool IsImporting { get; set; }
+    public partial bool HasImportedFile { get; set; }
+
+    // --- Import: parsed collections ---
+    public ObservableCollection<ImportCollectionStatus> ImportCollections { get; } = new();
+
+    [ObservableProperty]
+    public partial bool ShowImportStatus { get; set; }
+
+    // --- Import: download progress ---
+    [ObservableProperty]
+    public partial bool ShowImportProgress { get; set; }
+
+    [ObservableProperty]
+    public partial double ImportProgress { get; set; }
+
+    [ObservableProperty]
+    public partial string ImportProgressText { get; set; } = string.Empty;
+
+    [ObservableProperty]
+    public partial string ImportDetailText { get; set; } = string.Empty;
+
+    [ObservableProperty]
+    public partial bool IsDownloading { get; set; }
+
+    // --- Import: confirm dialog ---
+    [ObservableProperty]
+    public partial bool ShowImportConfirm { get; set; }
+
+    [ObservableProperty]
+    public partial string ImportConfirmMessage { get; set; } = string.Empty;
+
+    [ObservableProperty]
+    public partial bool CanOperate { get; set; } = true;
 
     // --- Export: Collections ---
     public ObservableCollection<CollectionItem> Collections { get; } = new();
@@ -39,12 +73,16 @@ public partial class ImportExportViewModel : ViewModelBase
     [ObservableProperty]
     public partial string ExportStatus { get; set; } = string.Empty;
 
-    // --- Export format dialog ---
+    // --- Export: difficulty filter ---
     [ObservableProperty]
-    public partial bool ShowExportFormatDialog { get; set; }
+    public partial double? ExportDiffMin { get; set; }
 
     [ObservableProperty]
-    public partial string ExportFilePath { get; set; } = string.Empty;
+    public partial double? ExportDiffMax { get; set; }
+
+    // Cached parsed data
+    private Dictionary<string, List<BeatmapRef>>? _parsedCollections;
+    private HashSet<int>? _missingIds;
 
     public ImportExportViewModel()
     {
@@ -55,13 +93,15 @@ public partial class ImportExportViewModel : ViewModelBase
     {
         _osuData = osuData;
         _settings = settings;
-        _beatmapData = beatmapData;
+        if (osuData != null && beatmapData != null && settings != null)
+            _syncService = new SyncService(osuData, beatmapData, settings);
         Console.WriteLine("[ImportExportViewModel] Services set.");
     }
 
-    /// <summary>
-    /// Switch to Import tab.
-    /// </summary>
+    // ================================================================
+    // Tab switching
+    // ================================================================
+
     [RelayCommand]
     public void ShowImport()
     {
@@ -69,9 +109,6 @@ public partial class ImportExportViewModel : ViewModelBase
         ImportStatus = string.Empty;
     }
 
-    /// <summary>
-    /// Switch to Export tab and load collections.
-    /// </summary>
     [RelayCommand]
     public async Task ShowExportAsync()
     {
@@ -79,50 +116,10 @@ public partial class ImportExportViewModel : ViewModelBase
         await LoadCollectionsAsync();
     }
 
-    /// <summary>
-    /// Load collections from osu! for export.
-    /// </summary>
-    [RelayCommand]
-    public async Task LoadCollectionsAsync()
-    {
-        if (_osuData == null)
-        {
-            ExportStatus = "osu! path not configured.";
-            return;
-        }
+    // ================================================================
+    // File browse
+    // ================================================================
 
-        Collections.Clear();
-        ExportStatus = "Loading collections...";
-
-        try
-        {
-            var service = new CollectionService(_osuData, _settings!);
-            var collections = await service.GetLocalCollectionsAsync();
-
-            foreach (var col in collections)
-            {
-                Collections.Add(new CollectionItem
-                {
-                    Name = col.Name,
-                    BeatmapCount = col.BeatmapCount,
-                    BeatmapOnlineIds = col.BeatmapOnlineIds,
-                    IsSelected = false
-                });
-            }
-
-            ExportStatus = $"Loaded {collections.Count} collections.";
-            Console.WriteLine($"[ImportExportViewModel] Loaded {collections.Count} collections.");
-        }
-        catch (Exception ex)
-        {
-            ExportStatus = $"Error: {ex.Message}";
-            Console.WriteLine($"[ImportExportViewModel] Error loading collections: {ex}");
-        }
-    }
-
-    /// <summary>
-    /// Select a file for import.
-    /// </summary>
     [RelayCommand]
     public async Task BrowseImportFileAsync()
     {
@@ -132,108 +129,211 @@ public partial class ImportExportViewModel : ViewModelBase
 
         if (topLevel != null)
         {
-            var fileTypes = new List<Avalonia.Platform.Storage.FilePickerFileType>
-            {
-                new("Collection Files") { Patterns = new[] { "*.txt", "*.zip" } },
-                new("All Files") { Patterns = new[] { "*.*" } }
-            };
-
             var result = await topLevel.StorageProvider.OpenFilePickerAsync(
                 new Avalonia.Platform.Storage.FilePickerOpenOptions
                 {
                     Title = "Select Collection File",
                     AllowMultiple = false,
-                    FileTypeFilter = fileTypes
+                    FileTypeFilter = new List<Avalonia.Platform.Storage.FilePickerFileType>
+                    {
+                        new("Collection Files") { Patterns = new[] { "*.txt" } },
+                        new("All Files") { Patterns = new[] { "*.*" } }
+                    }
                 });
 
             if (result.Count > 0)
             {
                 ImportFilePath = result[0].Path.LocalPath;
-                Console.WriteLine($"[ImportExportViewModel] Selected import file: {ImportFilePath}");
+                HasImportedFile = true;
+                ShowImportStatus = false;
+                ShowImportProgress = false;
+                ImportCollections.Clear();
+                ImportStatus = "File selected. Use Check Status to begin.";
             }
         }
     }
 
-    /// <summary>
-    /// Execute import.
-    /// </summary>
+    // ================================================================
+    // Check Status
+    // ================================================================
+
     [RelayCommand]
-    public async Task ImportAsync()
+    public async Task CheckImportStatusAsync()
     {
-        if (string.IsNullOrEmpty(ImportFilePath) || _osuData == null || _settings == null)
+        if (_osuData == null || string.IsNullOrEmpty(ImportFilePath))
         {
-            ImportStatus = "Please select a file and configure osu! path.";
+            ImportStatus = "Please select a .txt file and configure osu! path.";
             return;
         }
 
-        IsImporting = true;
-        ImportStatus = "Importing...";
-
-        // Close read-only Realm so CollectionService can open in write mode
-        _osuData.Close();
+        CanOperate = false;
+        ImportStatus = "Checking...";
+        ShowImportProgress = false;
 
         try
         {
-            var service = new CollectionService(_osuData, _settings);
-            var progress = new Progress<string>(msg => ImportStatus = msg);
+            _parsedCollections = await CollectionService.ParseTxtFileAsync(ImportFilePath);
+            var service = new CollectionService(_osuData, _settings!);
+            var statuses = await service.GetImportStatusAsync(_parsedCollections);
 
-            int imported;
-            if (ImportFilePath.EndsWith(".zip", StringComparison.OrdinalIgnoreCase))
-                imported = await service.ImportFromZipAsync(ImportFilePath, progress);
-            else
-                imported = await service.ImportFromTxtAsync(ImportFilePath, progress);
+            ImportCollections.Clear();
+            foreach (var s in statuses) ImportCollections.Add(s);
 
-            ImportStatus = $"Imported {imported} beatmaps.";
-            Console.WriteLine($"[ImportExportViewModel] Import complete: {imported} beatmaps.");
+            ShowImportStatus = true;
+            ImportStatus = $"{statuses.Sum(s => s.LocalBeatmaps)} / {statuses.Sum(s => s.TotalBeatmaps)} beatmaps locally available.";
         }
         catch (Exception ex)
         {
             ImportStatus = $"Error: {ex.Message}";
-            Console.WriteLine($"[ImportExportViewModel] Import error: {ex}");
         }
-        finally
+        finally { CanOperate = true; }
+    }
+
+    // ================================================================
+    // Start Sync
+    // ================================================================
+
+    [RelayCommand]
+    public async Task StartImportSyncAsync()
+    {
+        if (_osuData == null || _settings == null || _syncService == null)
+        { ImportStatus = "Services not initialized."; return; }
+        if (_parsedCollections == null) { ImportStatus = "Run Check Status first."; return; }
+
+        CanOperate = false;
+
+        try
         {
-            IsImporting = false;
+            var service = new CollectionService(_osuData, _settings);
+            _missingIds = await service.GetMissingBeatmapIdsAsync(_parsedCollections);
+
+            if (_missingIds.Count == 0)
+            {
+                ImportStatus = "All beatmaps already exist locally.";
+                CanOperate = true;
+                return;
+            }
+
+            ImportConfirmMessage = $"{_missingIds.Count} beatmap sets need to be downloaded.\nDownloaded .osz files go to your osu! directory.\nAfter download, import in osu! lazer, then click Apply Collection.";
+            ShowImportConfirm = true;
         }
+        catch (Exception ex) { ImportStatus = $"Error: {ex.Message}"; CanOperate = true; }
     }
 
-    /// <summary>
-    /// Show export format selection dialog.
-    /// </summary>
     [RelayCommand]
-    public void ShowExportDialog()
+    public async Task ContinueImportSyncAsync()
     {
-        var selected = Collections.Where(c => c.IsSelected).ToList();
-        if (selected.Count == 0)
+        ShowImportConfirm = false;
+        if (_missingIds == null || _missingIds.Count == 0 || _syncService == null || _settings == null)
+        { CanOperate = true; return; }
+
+        IsDownloading = true;
+        ShowImportProgress = true;
+        ImportProgress = 0;
+        ImportProgressText = "Downloading beatmaps...";
+        _syncCts = new CancellationTokenSource();
+
+        try
         {
-            ExportStatus = "Please select at least one collection.";
-            return;
+            var (downloaded, failed) = await _syncService.DownloadMissingAsync(
+                _missingIds,
+                _settings.Settings.DownloadPath ?? _settings.Settings.OsuInstallPath,
+                progress: new Progress<(int Current, int Total, int Downloaded, int Failed)>(p =>
+                {
+                    ImportProgress = p.Total > 0 ? (double)p.Current / p.Total * 100 : 0;
+                    ImportProgressText = $"Downloading ({p.Current}/{p.Total})";
+                    ImportDetailText = $"OK: {p.Downloaded}, Failed: {p.Failed}";
+                }),
+                ct: _syncCts.Token);
+
+            ImportProgressText = "Download Complete!";
+            ImportDetailText = $"Downloaded: {downloaded}, Failed: {failed}. Import .osz in osu! lazer, then Apply Collection.";
+            ImportStatus = "Download finished.";
         }
-
-        ShowExportFormatDialog = true;
+        catch (OperationCanceledException)
+        { ImportProgressText = "Cancelled"; ImportStatus = "Download cancelled."; }
+        catch (Exception ex)
+        { ImportProgressText = "Error"; ImportDetailText = ex.Message; ImportStatus = $"Error: {ex.Message}"; }
+        finally { IsDownloading = false; CanOperate = true; }
     }
 
-    /// <summary>
-    /// Export as TXT.
-    /// </summary>
+    [RelayCommand] public void CancelImportSync() => _syncCts?.Cancel();
+    [RelayCommand] public void DismissImportConfirm() { ShowImportConfirm = false; CanOperate = true; }
+
+    // ================================================================
+    // Apply Collection
+    // ================================================================
+
     [RelayCommand]
-    public async Task ExportAsTxtAsync()
+    public async Task ApplyCollectionsAsync()
     {
-        ShowExportFormatDialog = false;
-        await DoExportAsync("txt");
+        if (_osuData == null || _settings == null) { ImportStatus = "osu! path not configured."; return; }
+        if (_parsedCollections == null) { ImportStatus = "Run Check Status first."; return; }
+
+        CanOperate = false;
+        ImportStatus = "Applying collections...";
+
+        try
+        {
+            _osuData.Close();
+            var service = new CollectionService(_osuData, _settings);
+            await service.ApplyCollectionsAsync(_parsedCollections);
+            ImportStatus = "Collections applied! Restart osu! lazer to see changes.";
+        }
+        catch (Exception ex) { ImportStatus = $"Error: {ex.Message}"; }
+        finally { CanOperate = true; }
     }
 
-    /// <summary>
-    /// Export as ZIP.
-    /// </summary>
+    // ================================================================
+    // Export
+    // ================================================================
+
     [RelayCommand]
-    public async Task ExportAsZipAsync()
+    public async Task LoadCollectionsAsync()
     {
-        ShowExportFormatDialog = false;
-        await DoExportAsync("zip");
+        if (_osuData == null) { ExportStatus = "osu! path not configured."; return; }
+
+        Collections.Clear();
+        ExportStatus = "Loading collections...";
+
+        try
+        {
+            var service = new CollectionService(_osuData, _settings!);
+            var collections = await service.GetLocalCollectionsAsync();
+
+            // Get star ratings for filtering display
+            var localBeatmaps = await _osuData.GetLocalBeatmapInfoAsync();
+            var diffStars = localBeatmaps.Where(b => b.OnlineId > 0)
+                .ToDictionary(b => b.OnlineId, b => b.StarRating);
+
+            foreach (var col in collections)
+            {
+                var filtered = col.Beatmaps.AsEnumerable();
+                if (ExportDiffMin.HasValue || ExportDiffMax.HasValue)
+                {
+                    filtered = filtered.Where(b =>
+                        diffStars.TryGetValue(b.DifficultyId, out var sr) &&
+                        (!ExportDiffMin.HasValue || sr >= ExportDiffMin.Value) &&
+                        (!ExportDiffMax.HasValue || sr <= ExportDiffMax.Value));
+                }
+
+                var filteredList = filtered.ToList();
+                Collections.Add(new CollectionItem
+                {
+                    Name = col.Name,
+                    BeatmapCount = filteredList.Count,
+                    Beatmaps = filteredList,
+                    IsSelected = false
+                });
+            }
+
+            ExportStatus = $"Loaded {Collections.Count} collections.";
+        }
+        catch (Exception ex) { ExportStatus = $"Error: {ex.Message}"; }
     }
 
-    private async Task DoExportAsync(string format)
+    [RelayCommand]
+    public async Task ExportAsync()
     {
         if (_osuData == null || _settings == null) return;
 
@@ -241,85 +341,51 @@ public partial class ImportExportViewModel : ViewModelBase
         {
             Name = c.Name,
             BeatmapCount = c.BeatmapCount,
-            BeatmapOnlineIds = c.BeatmapOnlineIds
+            Beatmaps = c.Beatmaps
         }).ToList();
 
-        if (selected.Count == 0) return;
+        if (selected.Count == 0) { ExportStatus = "Please select at least one collection."; return; }
 
         IsExporting = true;
         ExportStatus = "Exporting...";
 
         try
         {
-            // Choose save path
             var topLevel = Avalonia.Controls.TopLevel.GetTopLevel(
                 Avalonia.Application.Current?.ApplicationLifetime is Avalonia.Controls.ApplicationLifetimes.IClassicDesktopStyleApplicationLifetime desktop
                     ? desktop.MainWindow : null);
 
+            string? exportPath = null;
             if (topLevel != null)
             {
-                var ext = format == "txt" ? "txt" : "zip";
                 var file = await topLevel.StorageProvider.SaveFilePickerAsync(
                     new Avalonia.Platform.Storage.FilePickerSaveOptions
                     {
                         Title = "Save Collections Export",
-                        DefaultExtension = $".{ext}",
-                        SuggestedFileName = $"collections_export.{ext}"
+                        DefaultExtension = ".txt",
+                        SuggestedFileName = "collections_export.txt"
                     });
-
-                if (file != null)
-                {
-                    ExportFilePath = file.Path.LocalPath;
-                }
-                else
-                {
-                    IsExporting = false;
-                    return;
-                }
+                if (file != null) exportPath = file.Path.LocalPath;
             }
+
+            if (exportPath == null) { IsExporting = false; return; }
 
             var service = new CollectionService(_osuData, _settings);
             var progress = new Progress<string>(msg => ExportStatus = msg);
-
-            if (format == "txt")
-                await service.ExportCollectionsAsTxtAsync(selected, ExportFilePath, progress);
-            else
-                await service.ExportCollectionsAsZipAsync(selected, ExportFilePath, progress);
-
-            ExportStatus = $"Exported {selected.Count} collections to {ExportFilePath}";
-            Console.WriteLine($"[ImportExportViewModel] Export complete.");
+            await service.ExportCollectionsAsTxtAsync(selected, exportPath, ExportDiffMin, ExportDiffMax, progress);
+            ExportStatus = $"Exported {selected.Count} collections.";
         }
-        catch (Exception ex)
-        {
-            ExportStatus = $"Error: {ex.Message}";
-            Console.WriteLine($"[ImportExportViewModel] Export error: {ex}");
-        }
-        finally
-        {
-            IsExporting = false;
-        }
-    }
-
-    /// <summary>
-    /// Cancel export dialog.
-    /// </summary>
-    [RelayCommand]
-    public void CancelExportDialog()
-    {
-        ShowExportFormatDialog = false;
+        catch (Exception ex) { ExportStatus = $"Error: {ex.Message}"; }
+        finally { IsExporting = false; }
     }
 }
 
-/// <summary>
-/// Item for collection selection list.
-/// </summary>
 public partial class CollectionItem : ViewModelBase
 {
     public string Name { get; set; } = string.Empty;
     public int BeatmapCount { get; set; }
-    public List<int> BeatmapOnlineIds { get; set; } = new();
+    public List<BeatmapRef> Beatmaps { get; set; } = new();
 
     [ObservableProperty]
     public partial bool IsSelected { get; set; }
 }
-

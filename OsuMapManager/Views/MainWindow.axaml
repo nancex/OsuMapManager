@@ -168,7 +168,7 @@
                         BorderThickness="1" CornerRadius="10">
                     <StackPanel Orientation="Horizontal">
                         <Button x:Name="NavSync" Content="Sync" Classes="NavButton Selected" Click="Nav_Click" Tag="0" Margin="0,0,4,0" />
-                        <Button x:Name="NavImportExport" Content="Import / Export" Classes="NavButton" Tag="1" Margin="0,0,4,0" IsEnabled="False" />
+                        <Button x:Name="NavImportExport" Content="Import / Export" Classes="NavButton" Click="Nav_Click" Tag="1" Margin="0,0,4,0" />
                         <Button x:Name="NavQuery" Content="Query" Classes="NavButton" Click="Nav_Click" Tag="2" Margin="0,0,4,0" />
                         <Button x:Name="NavSettings" Content="Settings" Classes="NavButton" Click="Nav_Click" Tag="3" />
                         <Button x:Name="NavAbout" Content="About" Classes="NavButton" Click="Nav_Click" Tag="4" Margin="4,0,0,0" />

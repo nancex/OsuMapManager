@@ -332,6 +332,14 @@ public class OsuDataService : IDisposable
         Dictionary<string, int> md5Map;
         lock (_cacheLock)
         { md5Map = _md5ToOnlineId != null ? new(_md5ToOnlineId) : new(); }
+        // Build difficulty ID -> set ID lookup from cached beatmaps
+        Dictionary<int, int> diffToSet;
+        lock (_cacheLock)
+        {
+            diffToSet = _cachedBeatmaps != null
+                ? _cachedBeatmaps.Where(b => b.OnlineId > 0).ToDictionary(b => b.OnlineId, b => b.BeatmapSetId)
+                : new();
+        }
 
         Console.WriteLine($"[OsuDataService] GetCollectionsAsync: using MD5 map with {md5Map.Count} entries");
 
@@ -348,18 +356,21 @@ public class OsuDataService : IDisposable
                     try
                     {
                         var name = col.Name ?? "Unnamed";
-                        var onlineIds = new List<int>();
+                        var beatmaps = new List<BeatmapRef>();
                         foreach (var md5 in col.BeatmapMD5Hashes)
                         {
                             if (!string.IsNullOrEmpty(md5) && md5Map.TryGetValue(md5, out var oid))
-                                onlineIds.Add(oid);
+                            {
+                                var setId = diffToSet.TryGetValue(oid, out var sid) ? sid : 0;
+                                beatmaps.Add(new BeatmapRef { DifficultyId = oid, BeatmapSetId = setId });
+                            }
                         }
-                        Console.WriteLine($"[OsuDataService]   Collection \"{name}\": {onlineIds.Count}/{col.BeatmapMD5Hashes.Count} beatmaps matched");
+                        Console.WriteLine($"[OsuDataService]   Collection \"{name}\": {beatmaps.Count}/{col.BeatmapMD5Hashes.Count} beatmaps matched");
                         result.Add(new CollectionInfo
                         {
                             Name = name,
-                            BeatmapCount = onlineIds.Count,
-                            BeatmapOnlineIds = onlineIds
+                            BeatmapCount = beatmaps.Count,
+                            Beatmaps = beatmaps
                         });
                     }
                     catch (Exception ex)

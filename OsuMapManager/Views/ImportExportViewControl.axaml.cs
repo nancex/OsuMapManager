@@ -30,5 +30,10 @@ public partial class ImportExportViewControl : UserControl
 
         ImportMode.IsVisible = tag == "import";
         ExportMode.IsVisible = tag == "export";
+        // Sync ViewModel state with UI tab
+        if (DataContext is OsuMapManager.ViewModels.MainViewModel mvm)
+        {
+            mvm.ImportExportVm.IsImportMode = tag == "import";
+        }
     }
 }
