@@ -63,10 +63,13 @@ public partial class MainWindow : Window
         btn.Classes.Add("Selected");
 
         SyncView.IsVisible = tag == "0";
-        ImportExportView.IsVisible = tag == "1";
+        CollectionsView.IsVisible = tag == "1";
         QueryView.IsVisible = tag == "2";
         SettingsView.IsVisible = tag == "3";
         AboutView.IsVisible = tag == "4";
     }
 }
+
+
+
 

@@ -260,4 +260,72 @@ public class CollectionService
 
         Console.WriteLine("[CollectionService] ApplyCollections complete.");
     }
+
+    // ================================================================
+    // Trim: remove difficulties outside star range from collections
+    // ================================================================
+    public async Task<int> TrimCollectionsAsync(
+        List<string> collectionNames, double? diffMin, double? diffMax)
+    {
+        var localBeatmaps = await _osuData.GetLocalBeatmapInfoAsync();
+        var diffStars = localBeatmaps
+            .Where(b => b.OnlineId > 0)
+            .ToDictionary(b => b.OnlineId, b => b.StarRating);
+        var md5ToDiffId = localBeatmaps
+            .Where(b => !string.IsNullOrEmpty(b.MD5Hash) && b.OnlineId > 0)
+            .GroupBy(b => b.MD5Hash!)
+            .ToDictionary(g => g.Key, g => g.First().OnlineId);
+
+        var realmPath = Path.Combine(_osuData.OsuPath, "client.realm");
+        int totalRemoved = 0;
+
+        await Task.Run(() =>
+        {
+            var config = new RealmConfiguration(realmPath)
+            {
+                SchemaVersion = 51,
+                ShouldDeleteIfMigrationNeeded = false
+            };
+
+            using var realm = Realm.GetInstance(config);
+
+            realm.Write(() =>
+            {
+                foreach (var name in collectionNames)
+                {
+                    var col = realm.All<BeatmapCollection>()
+                        .FirstOrDefault(c => c.Name == name);
+                    if (col == null)
+                    {
+                        Console.WriteLine($"[CollectionService] Trim: '{name}' not found, skipping.");
+                        continue;
+                    }
+
+                    var toRemove = new List<string>();
+                    foreach (var md5 in col.BeatmapMD5Hashes)
+                    {
+                        if (string.IsNullOrEmpty(md5)) continue;
+                        if (!md5ToDiffId.TryGetValue(md5, out var diffId)) continue;
+                        if (!diffStars.TryGetValue(diffId, out var sr)) continue;
+
+                        if ((diffMin.HasValue && sr < diffMin.Value) ||
+                            (diffMax.HasValue && sr > diffMax.Value))
+                        {
+                            toRemove.Add(md5);
+                        }
+                    }
+
+                    foreach (var md5 in toRemove)
+                        col.BeatmapMD5Hashes.Remove(md5);
+
+                    col.LastModified = DateTimeOffset.UtcNow;
+                    totalRemoved += toRemove.Count;
+                    Console.WriteLine($"[CollectionService] Trim '{name}': removed {toRemove.Count} difficulties.");
+                }
+            });
+        });
+
+        Console.WriteLine($"[CollectionService] Trim complete: {totalRemoved} total removed.");
+        return totalRemoved;
+    }
 }

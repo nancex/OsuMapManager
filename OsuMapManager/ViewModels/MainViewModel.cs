@@ -15,7 +15,7 @@ public partial class MainViewModel : ViewModelBase
 
     // Tab view models
     public SyncViewModel SyncVm { get; } = new();
-    public ImportExportViewModel ImportExportVm { get; } = new();
+    public CollectionsViewModel CollectionsVm { get; } = new();
     public QueryViewModel QueryVm { get; } = new();
     public SettingsViewModel SettingsVm { get; } = new();
 
@@ -90,7 +90,7 @@ public partial class MainViewModel : ViewModelBase
 
             // Wire up services to sub-viewmodels
             SyncVm.SetServices(_osuDataService, _beatmapDataService, _settingsService, this);
-            ImportExportVm.SetServices(_osuDataService, _settingsService, _beatmapDataService);
+            CollectionsVm.SetServices(_osuDataService, _settingsService, _beatmapDataService);
             QueryVm.SetServices(_osuDataService, _beatmapDataService, _settingsService);
 
 
@@ -159,3 +159,4 @@ public partial class MainViewModel : ViewModelBase
         Console.WriteLine("[MainViewModel] Database changed — sub-viewmodels refreshed.");
     }
 }
+

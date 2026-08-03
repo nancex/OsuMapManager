@@ -1,7 +1,7 @@
 <UserControl xmlns="https://github.com/avaloniaui"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:vm="using:OsuMapManager.ViewModels"
-             x:Class="OsuMapManager.Views.ImportExportViewControl"
+             x:Class="OsuMapManager.Views.CollectionsViewControl"
              x:DataType="vm:MainViewModel">
     <Grid ColumnDefinitions="220,*" ColumnSpacing="16">
 
@@ -9,23 +9,28 @@
         <Border Grid.Column="0" Classes="SidebarCard" VerticalAlignment="Stretch">
             <StackPanel>
                 <Button x:Name="IeImportBtn" Content="Import" Classes="NavButton Selected" Click="IeNav_Click" Tag="import" Margin="0,0,0,6" />
-                <Button x:Name="IeExportBtn" Content="Export" Classes="NavButton" Click="IeNav_Click" Tag="export" />
+                <Button x:Name="IeExportBtn" Content="Export" Classes="NavButton" Click="IeNav_Click" Tag="export" Margin="0,0,0,6" />
+                <Button x:Name="IeTrimBtn" Content="Trim" Classes="NavButton" Click="IeNav_Click" Tag="trim" />
 
                 <!-- Import-mode action buttons -->
-                <StackPanel IsVisible="{Binding ImportExportVm.IsImportMode}" Margin="0,16,0,0" Spacing="8">
+                <StackPanel IsVisible="{Binding CollectionsVm.IsImportMode}" Margin="0,16,0,0" Spacing="8">
                     <Button Content="Check Status" Classes="Primary"
-                            Command="{Binding ImportExportVm.CheckImportStatusCommand}"
-                            IsEnabled="{Binding ImportExportVm.CanOperate}" />
+                            Command="{Binding CollectionsVm.CheckImportStatusCommand}"
+                            IsEnabled="{Binding CollectionsVm.CanOperate}" />
                     <Button Content="Start Sync" Classes="Secondary"
-                            Command="{Binding ImportExportVm.StartImportSyncCommand}"
-                            IsEnabled="{Binding ImportExportVm.CanOperate}" />
+                            Command="{Binding CollectionsVm.StartImportSyncCommand}"
+                            IsEnabled="{Binding CollectionsVm.CanOperate}" />
                     <Button Content="Apply Collection" Classes="Secondary"
-                            Command="{Binding ImportExportVm.ApplyCollectionsCommand}"
-                            IsEnabled="{Binding ImportExportVm.CanOperate}" />
+                            Command="{Binding CollectionsVm.ApplyCollectionsCommand}"
+                            IsEnabled="{Binding CollectionsVm.CanOperate}" />
                 </StackPanel>
 
-                <TextBlock Text="{Binding ImportExportVm.ImportStatus}" Classes="Muted" TextWrapping="Wrap" Margin="0,12,0,0"
-                           IsVisible="{Binding ImportExportVm.ImportStatus, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
+                
+
+                <TextBlock Text="{Binding CollectionsVm.ImportStatus}" Classes="Muted" TextWrapping="Wrap" Margin="0,12,0,0"
+                           IsVisible="{Binding CollectionsVm.ImportStatus, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
+                <TextBlock Text="{Binding CollectionsVm.TrimStatus}" Classes="Muted" TextWrapping="Wrap" Margin="0,12,0,0"
+                           IsVisible="{Binding CollectionsVm.TrimStatus, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
             </StackPanel>
         </Border>
 
@@ -35,24 +40,24 @@
             <!-- ===== IMPORT MODE ===== -->
             <Grid x:Name="ImportMode" IsVisible="True">
                 <Border Classes="Card" VerticalAlignment="Top"
-                        IsVisible="{Binding !ImportExportVm.ShowImportStatus}">
+                        IsVisible="{Binding !CollectionsVm.ShowImportStatus}">
                     <StackPanel>
                         <TextBlock Text="Import Collections" Classes="H2" Margin="0,0,0,10" />
                         <TextBlock Text="Select a .txt file exported from this app to import collections." Classes="Body" TextWrapping="Wrap" Margin="0,0,0,16" />
                         <Border Background="#10FFFFFF" CornerRadius="8" Padding="20" BorderBrush="#18FFFFFF" BorderThickness="1">
                             <StackPanel HorizontalAlignment="Center">
                                 <TextBlock Text="?" FontSize="40" HorizontalAlignment="Center" Margin="0,0,0,10" />
-                                <Button Content="Browse Files..." Classes="Secondary" Command="{Binding ImportExportVm.BrowseImportFileCommand}" Margin="0,0,0,8" />
-                                <TextBlock Text="{Binding ImportExportVm.ImportFilePath}" Classes="Muted" TextWrapping="Wrap" MaxWidth="400" />
+                                <Button Content="Browse Files..." Classes="Secondary" Command="{Binding CollectionsVm.BrowseImportFileCommand}" Margin="0,0,0,8" />
+                                <TextBlock Text="{Binding CollectionsVm.ImportFilePath}" Classes="Muted" TextWrapping="Wrap" MaxWidth="400" />
                             </StackPanel>
                         </Border>
                     </StackPanel>
                 </Border>
 
-                <ScrollViewer IsVisible="{Binding ImportExportVm.ShowImportStatus}">
+                <ScrollViewer IsVisible="{Binding CollectionsVm.ShowImportStatus}">
                     <StackPanel>
                         <TextBlock Text="Collection Import Status" Classes="H1" Margin="0,0,0,12" />
-                        <ItemsControl ItemsSource="{Binding ImportExportVm.ImportCollections}">
+                        <ItemsControl ItemsSource="{Binding CollectionsVm.ImportCollections}">
                             <ItemsControl.ItemTemplate>
                                 <DataTemplate>
                                     <Border Classes="Card" Margin="0,0,0,8" Padding="14">
@@ -80,36 +85,32 @@
             </Grid>
 
             <!-- ===== EXPORT MODE ===== -->
-            <Grid x:Name="ExportMode" IsVisible="False" RowDefinitions="*,Auto">
+            <Grid x:Name="ExportMode" IsVisible="False" RowDefinitions="Auto,Auto,Auto,*,Auto">
                 <Border Grid.Row="0" Classes="Card" VerticalAlignment="Stretch">
-                    <Grid RowDefinitions="Auto,Auto,*,Auto">
+                    <Grid RowDefinitions="Auto,Auto,Auto,*,Auto">
                         <StackPanel Grid.Row="0" Margin="0,0,0,12">
                             <TextBlock Text="Export Collections" Classes="H2" Margin="0,0,0,6" />
                             <TextBlock Text="Select collections to export. Difficulty filter applies to counts and export." Classes="Body" Margin="0,0,0,6" />
                         </StackPanel>
-
-                        <!-- Difficulty filter card (moved to right side) -->
                         <Border Grid.Row="1" Background="#15FFFFFF" CornerRadius="8" Padding="12" Margin="0,0,0,12">
                             <StackPanel>
                                 <TextBlock Text="Difficulty Rating" Classes="Body" FontWeight="Bold" Margin="0,0,0,6" />
                                 <Grid ColumnDefinitions="Auto,*,Auto,*" ColumnSpacing="8">
                                     <TextBlock Text="Min:" VerticalAlignment="Center" Classes="Body" />
-                                    <TextBox Grid.Column="1" Text="{Binding ImportExportVm.ExportDiffMin, TargetNullValue=''}"
+                                    <TextBox Grid.Column="1" Text="{Binding CollectionsVm.ExportDiffMin, TargetNullValue=''}"
                                              PlaceholderText="0.0" />
                                     <TextBlock Grid.Column="2" Text="Max:" VerticalAlignment="Center" Classes="Body" />
-                                    <TextBox Grid.Column="3" Text="{Binding ImportExportVm.ExportDiffMax, TargetNullValue=''}"
+                                    <TextBox Grid.Column="3" Text="{Binding CollectionsVm.ExportDiffMax, TargetNullValue=''}"
                                              PlaceholderText="10.0" />
                                 </Grid>
                             </StackPanel>
                         </Border>
-
                         <StackPanel Grid.Row="2" Margin="0,0,0,12">
                             <Button Content="Refresh List" Classes="Secondary" HorizontalAlignment="Left"
-                                    Command="{Binding ImportExportVm.LoadCollectionsCommand}" />
+                                    Command="{Binding CollectionsVm.LoadCollectionsCommand}" />
                         </StackPanel>
-
                         <ScrollViewer Grid.Row="3">
-                            <ListBox ItemsSource="{Binding ImportExportVm.Collections}" SelectionMode="Multiple">
+                            <ListBox ItemsSource="{Binding CollectionsVm.Collections}" SelectionMode="Multiple">
                                 <ListBox.ItemTemplate>
                                     <DataTemplate x:DataType="vm:CollectionItem">
                                         <Grid ColumnDefinitions="Auto,*,Auto" ColumnSpacing="12">
@@ -123,48 +124,102 @@
                                 </ListBox.ItemTemplate>
                             </ListBox>
                         </ScrollViewer>
-                        <TextBlock Grid.Row="4" Text="{Binding ImportExportVm.ExportStatus}" Classes="Body" TextWrapping="Wrap"
+                        <TextBlock Grid.Row="4" Text="{Binding CollectionsVm.ExportStatus}" Classes="Body" TextWrapping="Wrap"
                                    Foreground="#FF6ECF" Margin="0,6,0,0" />
                     </Grid>
                 </Border>
                 <Border Grid.Row="1" Padding="0,16,0,0">
                     <Button Content="Export" Classes="Primary" HorizontalAlignment="Right"
-                            Command="{Binding ImportExportVm.ExportCommand}"
-                            IsEnabled="{Binding !ImportExportVm.IsExporting}" />
+                            Command="{Binding CollectionsVm.ExportCommand}"
+                            IsEnabled="{Binding !CollectionsVm.IsExporting}" />
+                </Border>
+            </Grid>
+
+            <!-- ===== TRIM MODE ===== -->
+            <Grid x:Name="TrimMode" IsVisible="False" RowDefinitions="Auto,Auto,Auto,*,Auto">
+                <Border Grid.Row="0" Classes="Card" VerticalAlignment="Stretch">
+                    <Grid RowDefinitions="Auto,Auto,Auto,*,Auto">
+                        <StackPanel Grid.Row="0" Margin="0,0,0,12">
+                            <TextBlock Text="Trim Collections" Classes="H2" Margin="0,0,0,6" />
+                            <TextBlock Text="Remove difficulties outside the star range from selected collections." Classes="Body" Margin="0,0,0,6" />
+                        </StackPanel>
+
+                        <Border Grid.Row="1" Background="#15FFFFFF" CornerRadius="8" Padding="12" Margin="0,0,0,12">
+                            <StackPanel>
+                                <TextBlock Text="Difficulty Rating" Classes="Body" FontWeight="Bold" Margin="0,0,0,6" />
+                                <Grid ColumnDefinitions="Auto,*,Auto,*" ColumnSpacing="8">
+                                    <TextBlock Text="Min:" VerticalAlignment="Center" Classes="Body" />
+                                    <TextBox Grid.Column="1" Text="{Binding CollectionsVm.TrimDiffMin, TargetNullValue=''}"
+                                             PlaceholderText="0.0" />
+                                    <TextBlock Grid.Column="2" Text="Max:" VerticalAlignment="Center" Classes="Body" />
+                                    <TextBox Grid.Column="3" Text="{Binding CollectionsVm.TrimDiffMax, TargetNullValue=''}"
+                                             PlaceholderText="10.0" />
+                                </Grid>
+                            </StackPanel>
+                        </Border>
+
+                        <StackPanel Grid.Row="2" Margin="0,0,0,12">
+                            <Button Content="Refresh List" Classes="Secondary" HorizontalAlignment="Left"
+                                    Command="{Binding CollectionsVm.LoadTrimCollectionsCommand}" />
+                        </StackPanel>
+
+                        <ScrollViewer Grid.Row="3">
+                            <ListBox ItemsSource="{Binding CollectionsVm.TrimCollections}" SelectionMode="Multiple">
+                                <ListBox.ItemTemplate>
+                                    <DataTemplate x:DataType="vm:CollectionItem">
+                                        <Grid ColumnDefinitions="Auto,*,Auto" ColumnSpacing="12">
+                                            <CheckBox IsChecked="{Binding IsSelected}" VerticalAlignment="Center" />
+                                            <TextBlock Grid.Column="1" Text="{Binding Name}" VerticalAlignment="Center" FontSize="14" Foreground="White" />
+                                            <Border Grid.Column="2" Background="#15FFFFFF" CornerRadius="4" Padding="8,2">
+                                                <TextBlock Text="{Binding BeatmapCount, StringFormat={}{0} maps}" Classes="Muted" />
+                                            </Border>
+                                        </Grid>
+                                    </DataTemplate>
+                                </ListBox.ItemTemplate>
+                            </ListBox>
+                        </ScrollViewer>
+                        <TextBlock Grid.Row="4" Text="{Binding CollectionsVm.TrimStatus}" Classes="Body" TextWrapping="Wrap"
+                                   Foreground="#FF6ECF" Margin="0,6,0,0" />
+                    </Grid>
+                </Border>
+                <Border Grid.Row="1" Padding="0,16,0,0">
+                    <Button Content="Apply" Classes="Primary" HorizontalAlignment="Right"
+                            Command="{Binding CollectionsVm.TrimCollectionsCommand}"
+                            IsEnabled="{Binding !CollectionsVm.IsTrimming}" />
                 </Border>
             </Grid>
 
             <!-- ===== DOWNLOAD PROGRESS ===== -->
             <Border Classes="Card" Padding="24"
-                    IsVisible="{Binding ImportExportVm.ShowImportProgress}"
+                    IsVisible="{Binding CollectionsVm.ShowImportProgress}"
                     VerticalAlignment="Center" HorizontalAlignment="Center"
                     MinWidth="400" MaxWidth="500">
                 <StackPanel Spacing="16">
                     <TextBlock Text="Downloading Beatmaps" Classes="H1" HorizontalAlignment="Center" />
                     <TextBlock Classes="H2" HorizontalAlignment="Center"
-                               Text="{Binding ImportExportVm.ImportProgressText}" />
-                    <ProgressBar Value="{Binding ImportExportVm.ImportProgress}" Height="12" Minimum="0" Maximum="100" />
-                    <TextBlock Text="{Binding ImportExportVm.ImportDetailText}" Classes="Muted" HorizontalAlignment="Center" />
+                               Text="{Binding CollectionsVm.ImportProgressText}" />
+                    <ProgressBar Value="{Binding CollectionsVm.ImportProgress}" Height="12" Minimum="0" Maximum="100" />
+                    <TextBlock Text="{Binding CollectionsVm.ImportDetailText}" Classes="Muted" HorizontalAlignment="Center" />
                     <Button Content="Cancel" Classes="Danger"
-                            Command="{Binding ImportExportVm.CancelImportSyncCommand}"
-                            HorizontalAlignment="Center" IsEnabled="{Binding ImportExportVm.IsDownloading}" />
+                            Command="{Binding CollectionsVm.CancelImportSyncCommand}"
+                            HorizontalAlignment="Center" IsEnabled="{Binding CollectionsVm.IsDownloading}" />
                 </StackPanel>
             </Border>
 
             <!-- ===== CONFIRM OVERLAY ===== -->
-            <Border IsVisible="{Binding ImportExportVm.ShowImportConfirm}"
+            <Border IsVisible="{Binding CollectionsVm.ShowImportConfirm}"
                     Background="#B0000000" VerticalAlignment="Stretch" HorizontalAlignment="Stretch">
                 <Border Classes="Card" HorizontalAlignment="Center" VerticalAlignment="Center"
                         MaxWidth="450" Padding="24">
                     <StackPanel>
                         <TextBlock Text="Confirm Download" Classes="H1" Margin="0,0,0,12" Foreground="#FF6ECF" />
-                        <TextBlock Text="{Binding ImportExportVm.ImportConfirmMessage}" Classes="Body"
+                        <TextBlock Text="{Binding CollectionsVm.ImportConfirmMessage}" Classes="Body"
                                    TextWrapping="Wrap" Margin="0,0,0,16" />
                         <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Spacing="10">
                             <Button Content="Cancel" Classes="Secondary"
-                                    Command="{Binding ImportExportVm.DismissImportConfirmCommand}" />
+                                    Command="{Binding CollectionsVm.DismissImportConfirmCommand}" />
                             <Button Content="Continue" Classes="Primary"
-                                    Command="{Binding ImportExportVm.ContinueImportSyncCommand}" />
+                                    Command="{Binding CollectionsVm.ContinueImportSyncCommand}" />
                         </StackPanel>
                     </StackPanel>
                 </Border>
@@ -173,3 +228,8 @@
         </Grid>
     </Grid>
 </UserControl>
+
+
+
+
+
