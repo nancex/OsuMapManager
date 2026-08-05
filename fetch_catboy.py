@@ -1,49 +1,55 @@
 #!/usr/bin/env python3
 """
-CatboyDataFetcher (Python)
-===========================
-Fetches all Ranked beatmap metadata from catboy.best API
-and stores it in a local SQLite database.
+CatboyDataFetcher
+=================
+Fetches beatmap metadata from catboy.best API and stores it in local SQLite databases.
 
 Dependencies: pip install requests
-(cloudscraper is optional - only needed if Cloudflare blocks you)
 
 Usage:
-    python fetch_catboy.py              # Test mode: offset 0..100
-    python fetch_catboy.py --full       # Full fetch (all offsets)
-    python fetch_catboy.py --help       # Show all options
+    python fetch_catboy.py                           # ranked + mania (default)
+    python fetch_catboy.py --status 4                # loved, all modes
+    python fetch_catboy.py --status 1 --mode 2       # ranked + osu
+    python fetch_catboy.py --all                     # ranked + loved, all modes, merged
+    python fetch_catboy.py --help                    # show all options
+
+API parameters:
+    --status    -2 = graveyard   -1 = WIP   0 = pending
+                 1 = ranked       3 = qualified   4 = loved
+    --mode      1 = taiko         2 = osu     3 = mania
+                Omit --mode to fetch all modes.
 """
 
-import json
+import argparse
+import os
 import sqlite3
 import sys
 import time
-import datetime
-import os
-from concurrent.futures import ThreadPoolExecutor, as_completed
-from dataclasses import dataclass, field
-from typing import Optional
 import threading
+from concurrent.futures import ThreadPoolExecutor, as_completed
+from dataclasses import dataclass
 from email.utils import parsedate_to_datetime
+from typing import Optional
+
 
 # ================================================================
 # Configuration
 # ================================================================
 
 CATBOY_BASE = "https://catboy.best/api/v2/search"
-STATUS = 1        # Ranked
-MODE = 3          # Mania
-PAGE_SIZE = 100
-MAX_OFFSET = 10000  # Test cap; use --full for unlimited
+PAGE_SIZE = 200
+MAX_OFFSET = 80000       # test cap; use --full for unlimited
 THREAD_COUNT = 8
-OUTPUT_DB = "catboy_ranked_mania.db"
+OUTPUT_DIR = "./map_dbs"  # default output directory
 
-# Rate-limit pause coordination (shared across all threads)
+# Rate-limit pause coordination
 _rate_limit_event = threading.Event()
-_rate_limit_event.set()  # initially not paused
+_rate_limit_event.set()
 _rate_limit_lock = threading.Lock()
 
-# Browser-like headers to bypass Cloudflare WAF
+# End-of-data signal: set when a page returns [] to stop all threads
+_end_of_data = threading.Event()
+
 HEADERS = {
     "User-Agent": (
         "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
@@ -54,7 +60,6 @@ HEADERS = {
     "Accept-Language": "en-US,en;q=0.9",
     "Accept-Encoding": "gzip, deflate, br",
 }
-
 
 # ================================================================
 # In-memory records
@@ -103,28 +108,24 @@ class BeatmapData:
 
 
 # ================================================================
-# API Fetching
+# API helpers
 # ================================================================
 
 def _safe_float(obj: dict, key: str) -> float:
     v = obj.get(key)
     return float(v) if v is not None else 0.0
 
-
 def _safe_int(obj: dict, key: str) -> int:
     v = obj.get(key)
     return int(v) if v is not None else 0
-
 
 def _safe_str(obj: dict, key: str) -> str:
     v = obj.get(key)
     return str(v) if v is not None else ""
 
-
 def _safe_bool(obj: dict, key: str) -> bool:
     v = obj.get(key)
     return bool(v) if v is not None else False
-
 
 def parse_beatmap_set(item: dict, api_offset: int) -> BeatmapSetData:
     return BeatmapSetData(
@@ -149,7 +150,6 @@ def parse_beatmap_set(item: dict, api_offset: int) -> BeatmapSetData:
         submitted_date=_safe_str(item, "submitted_date"),
     )
 
-
 def parse_beatmap(bm: dict, beatmapset_id: int) -> BeatmapData:
     return BeatmapData(
         id=_safe_int(bm, "id"),
@@ -169,9 +169,7 @@ def parse_beatmap(bm: dict, beatmapset_id: int) -> BeatmapData:
         difficulty_rating=_safe_float(bm, "difficulty_rating"),
     )
 
-
 def _parse_retry_after(response) -> float:
-    """Parse Retry-After header. Returns seconds to wait (may be <= 0 if already past)."""
     retry_after = response.headers.get("Retry-After", "")
     if not retry_after:
         return 60.0
@@ -180,23 +178,38 @@ def _parse_retry_after(response) -> float:
     except ValueError:
         pass
     try:
+        import datetime as dt
         retry_dt = parsedate_to_datetime(retry_after)
-        delay = (retry_dt - datetime.datetime.now(datetime.timezone.utc)).total_seconds()
+        delay = (retry_dt - dt.datetime.now(dt.timezone.utc)).total_seconds()
         return delay
     except Exception:
         pass
     return 60.0
 
 
-def fetch_page(session, offset: int, limit: int):
-    """Fetch a single page. Returns (sets_list, beatmaps_list, ok_bool)."""
-    global _rate_limit_event, _rate_limit_lock
+def build_url(offset: int, limit: int, status: int, mode: Optional[int]) -> str:
+    """Build API URL. mode is optional - omit to fetch all modes."""
+    url = f"{CATBOY_BASE}?status={status}&limit={limit}&offset={offset}"
+    if mode is not None:
+        url += f"&mode={mode}"
+    return url
 
-    url = f"{CATBOY_BASE}?status={STATUS}&limit={limit}&offset={offset}&mode={MODE}"
+
+# ================================================================
+# Fetch
+# ================================================================
+
+def fetch_page(session, offset: int, limit: int, status: int, mode: Optional[int]):
+    """Fetch a single page. Returns (sets, beatmaps, ok, eod)."""
+    global _rate_limit_event, _rate_limit_lock, _end_of_data
+
+    # Stop immediately if another thread already hit end-of-data
+    if _end_of_data.is_set():
+        return [], [], False, True
+
+    url = build_url(offset, limit, status, mode)
     try:
-        # Wait if rate-limit pause is active
         _rate_limit_event.wait()
-
         resp = session.get(url, timeout=30)
 
         if resp.status_code == 429:
@@ -205,21 +218,28 @@ def fetch_page(session, offset: int, limit: int):
                     _rate_limit_event.clear()
                     delay = _parse_retry_after(resp)
                     delay = max(0.0, min(delay, 300.0))
-                    print(f"  [RATELIMIT] HTTP 429 at offset={offset}. Pausing for {delay:.1f}s...")
+                    print(f"  [RATELIMIT] HTTP 429 at offset={offset}. Pausing {delay:.1f}s...")
                     time.sleep(delay)
                     _rate_limit_event.set()
-                    print(f"  [RATELIMIT] Pause over, resuming.")
+                    print(f"  [RATELIMIT] Resuming.")
                 finally:
                     _rate_limit_lock.release()
             else:
                 _rate_limit_event.wait()
-            return [], [], False
+            return [], [], False, False
 
         if resp.status_code != 200:
             print(f"  [API] offset={offset}: HTTP {resp.status_code}")
-            return [], [], False
+            return [], [], False, False
 
         data = resp.json()
+
+        # Empty list [] = end of data reached - signal all threads to stop
+        if not data:
+            print(f"  [EOD] offset={offset}: empty page, reached end.")
+            _end_of_data.set()
+            return [], [], True, True
+
         sets = []
         beatmaps = []
         for item in data:
@@ -227,18 +247,67 @@ def fetch_page(session, offset: int, limit: int):
             sets.append(s)
             for bm in item.get("beatmaps", []):
                 beatmaps.append(parse_beatmap(bm, s.id))
-
-        return sets, beatmaps, True
+        return sets, beatmaps, True, False
     except Exception as e:
         print(f"  [API] offset={offset}: ERROR - {e}")
-        return [], [], False
+        return [], [], False, False
+
+
+def fetch_all(session, status: int, mode: Optional[int],
+              page_size: int, max_offset: int, threads: int):
+    """Fetch all pages for a given (status, mode) combo. Stops early if end-of-data reached."""
+    global _end_of_data
+    _end_of_data.clear()
+
+    offsets = list(range(0, max_offset + page_size, page_size))
+    status_label = _status_label(status)
+    mode_label = f"mode={mode}" if mode is not None else "all modes"
+    print(f"\n  Fetching status={status} ({status_label}), {mode_label}")
+    print(f"  Pages: {len(offsets)}, Threads: {threads}")
+
+    all_sets: list = []
+    all_beatmaps: list = []
+    ok_pages = 0
+    fail_pages = 0
+
+    with ThreadPoolExecutor(max_workers=threads) as executor:
+        futures = {
+            executor.submit(fetch_page, session, off, page_size, status, mode): off
+            for off in offsets
+        }
+        for future in as_completed(futures):
+            sets, beatmaps, ok, eod = future.result()
+            if ok:
+                all_sets.extend(sets)
+                all_beatmaps.extend(beatmaps)
+                ok_pages += 1
+            else:
+                fail_pages += 1
+            print(f"  [{ok_pages + fail_pages}/{len(offsets)}] "
+                  f"Sets: {len(all_sets)}  Beatmaps: {len(all_beatmaps)}")
+
+            if eod:
+                # Cancel all remaining pending futures
+                for f in futures:
+                    f.cancel()
+                print(f"  [EOD] Stopped early at offset ~{offsets[ok_pages + fail_pages - 1]}.")
+                break
+
+    print(f"  Done: {ok_pages} OK, {fail_pages} failed  |  "
+          f"Sets: {len(all_sets)}  Beatmaps: {len(all_beatmaps)}")
+    return all_sets, all_beatmaps
+
+
+def _status_label(status: int) -> str:
+    return {-2: "graveyard", -1: "WIP", 0: "pending",
+            1: "ranked", 3: "qualified", 4: "loved"}.get(status, str(status))
 
 
 # ================================================================
-# SQLite helpers
+# SQLite
 # ================================================================
 
-CREATE_SETS_TABLE = """
+CREATE_SETS = """
 CREATE TABLE IF NOT EXISTS beatmap_sets (
     id              INTEGER PRIMARY KEY,
     bpm             REAL,
@@ -262,7 +331,7 @@ CREATE TABLE IF NOT EXISTS beatmap_sets (
 )
 """
 
-CREATE_BEATMAPS_TABLE = """
+CREATE_BEATMAPS = """
 CREATE TABLE IF NOT EXISTS beatmaps (
     id               INTEGER PRIMARY KEY,
     beatmapset_id    INTEGER,
@@ -301,15 +370,14 @@ VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 
 
 def write_to_sqlite(db_path: str, all_sets: list, all_beatmaps: list):
-    """Write all parsed data to SQLite in a single transaction."""
-    print(f"\n--- Writing to SQLite: {db_path} ---")
+    os.makedirs(os.path.dirname(db_path) or ".", exist_ok=True)
+    print(f"\n  Writing {db_path} ...")
     conn = sqlite3.connect(db_path)
     conn.execute("PRAGMA journal_mode=WAL")
     conn.execute("PRAGMA synchronous=NORMAL")
-    conn.execute("PRAGMA cache_size=-64000")  # 64 MB cache
-
-    conn.execute(CREATE_SETS_TABLE)
-    conn.execute(CREATE_BEATMAPS_TABLE)
+    conn.execute("PRAGMA cache_size=-64000")
+    conn.execute(CREATE_SETS)
+    conn.execute(CREATE_BEATMAPS)
     conn.execute(CREATE_INDEX)
 
     set_rows = [
@@ -331,10 +399,51 @@ def write_to_sqlite(db_path: str, all_sets: list, all_beatmaps: list):
     conn.commit()
 
     size_mb = os.path.getsize(db_path) / (1024 * 1024)
-    print(f"  Sets written:    {len(set_rows)}")
-    print(f"  Beatmaps written: {len(bm_rows)}")
-    print(f"  DB size:          {size_mb:.1f} MB")
+    print(f"  Sets: {len(set_rows)}  Beatmaps: {len(bm_rows)}  Size: {size_mb:.1f} MB")
     conn.close()
+
+
+def merge_databases(src_paths: list[str], dest_path: str):
+    """Merge multiple SQLite DBs into one by copying all rows."""
+    os.makedirs(os.path.dirname(dest_path) or ".", exist_ok=True)
+    print(f"\n  Merging into {dest_path} ...")
+
+    dest = sqlite3.connect(dest_path)
+    dest.execute("PRAGMA journal_mode=WAL")
+    dest.execute("PRAGMA synchronous=NORMAL")
+    dest.execute("PRAGMA cache_size=-64000")
+    dest.execute(CREATE_SETS)
+    dest.execute(CREATE_BEATMAPS)
+    dest.execute(CREATE_INDEX)
+
+    total_sets = 0
+    total_bm = 0
+
+    for src_path in src_paths:
+        if not os.path.exists(src_path):
+            print(f"  [SKIP] {src_path} not found")
+            continue
+        src = sqlite3.connect(src_path)
+
+        set_rows = list(src.execute("SELECT * FROM beatmap_sets"))
+        if set_rows:
+            cols = ",".join("?" * len(set_rows[0]))
+            dest.executemany(f"INSERT OR REPLACE INTO beatmap_sets VALUES ({cols})", set_rows)
+            total_sets += len(set_rows)
+
+        bm_rows = list(src.execute("SELECT * FROM beatmaps"))
+        if bm_rows:
+            cols = ",".join("?" * len(bm_rows[0]))
+            dest.executemany(f"INSERT OR REPLACE INTO beatmaps VALUES ({cols})", bm_rows)
+            total_bm += len(bm_rows)
+
+        src.close()
+        print(f"  + {os.path.basename(src_path)}: {len(set_rows)} sets, {len(bm_rows)} beatmaps")
+
+    dest.commit()
+    size_mb = os.path.getsize(dest_path) / (1024 * 1024)
+    print(f"  Total: {total_sets} sets, {total_bm} beatmaps  |  Size: {size_mb:.1f} MB")
+    dest.close()
 
 
 # ================================================================
@@ -342,9 +451,30 @@ def write_to_sqlite(db_path: str, all_sets: list, all_beatmaps: list):
 # ================================================================
 
 def main():
-    import argparse
+    parser = argparse.ArgumentParser(
+        description="Catboy Beatmap Fetcher - build local beatmap databases from catboy.best",
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        epilog="""
+API parameters:
+  --status    -2 = graveyard   -1 = WIP   0 = pending
+               1 = ranked       3 = qualified   4 = loved
+  --mode      1 = taiko         2 = osu     3 = mania
+              Omit --mode to fetch all modes.
 
-    parser = argparse.ArgumentParser(description="Catboy Beatmap Fetcher")
+Examples:
+  python fetch_catboy.py                           # ranked + mania (default)
+  python fetch_catboy.py --status 4                # loved, all modes
+  python fetch_catboy.py --status 1 --mode 2       # ranked + osu
+  python fetch_catboy.py --all --full              # full fetch: ranked + loved
+        """,
+    )
+    parser.add_argument("--all", action="store_true",
+                        help="Fetch ranked and loved (all modes), then merge into catboy_all.db. "
+                             "Ignores --status, --mode, and --output.")
+    parser.add_argument("--status", type=int, default=1,
+                        help="Beatmap status: -2=graveyard, -1=WIP, 0=pending, 1=ranked (default), 3=qualified, 4=loved")
+    parser.add_argument("--mode", type=int, default=3,
+                        help="Game mode: 1=taiko, 2=osu, 3=mania (default). Omit for all modes.")
     parser.add_argument("--full", action="store_true",
                         help="Full fetch (no offset cap)")
     parser.add_argument("--max-offset", type=int, default=MAX_OFFSET,
@@ -353,39 +483,26 @@ def main():
                         help=f"Items per page (default: {PAGE_SIZE})")
     parser.add_argument("--threads", type=int, default=THREAD_COUNT,
                         help=f"Concurrent threads (default: {THREAD_COUNT})")
-    parser.add_argument("--output", type=str, default=OUTPUT_DB,
-                        help=f"Output DB file (default: {OUTPUT_DB})")
+    parser.add_argument("--output", type=str, default=None,
+                        help=f"Output DB path (default: {OUTPUT_DIR}/catboy_<status>_<mode>.db)")
+    parser.add_argument("--output-dir", type=str, default=OUTPUT_DIR,
+                        help=f"Output directory (default: {OUTPUT_DIR})")
     parser.add_argument("--cloudscraper", action="store_true",
                         help="Use cloudscraper to bypass Cloudflare")
     args = parser.parse_args()
 
     max_offset = args.max_offset
     if args.full:
-        # Full fetch: start with a generous cap, auto-extend if needed
         max_offset = 100000
 
-    offsets = list(range(0, max_offset + args.page_size, args.page_size))
-
-    print("=" * 60)
-    print("  CatboyDataFetcher (Python) - Beatmap DB Builder")
-    print("=" * 60)
-    print(f"  API:      {CATBOY_BASE}")
-    print(f"  Status:   {STATUS} (Ranked)")
-    print(f"  Mode:     {MODE} (Mania)")
-    print(f"  Pages:    {len(offsets)}  (offset 0..{max_offset}, {args.page_size}/page)")
-    print(f"  Threads:  {args.threads}")
-    print(f"  Output:   {args.output}")
-    print()
-
-    # --- Choose HTTP backend ---
+    # --- HTTP session ---
     if args.cloudscraper:
         try:
             import cloudscraper
             session = cloudscraper.create_scraper()
-            print("[OK] Using cloudscraper (Cloudflare bypass)")
+            print("[OK] Using cloudscraper")
         except ImportError:
-            print("[WARN] cloudscraper not installed. pip install cloudscraper")
-            print("[WARN] Falling back to requests.")
+            print("[WARN] cloudscraper not installed. Falling back to requests.")
             import requests
             session = requests.Session()
     else:
@@ -393,49 +510,66 @@ def main():
         session = requests.Session()
     session.headers.update(HEADERS)
 
-    # --- Phase 1: Fetch ---
-    print("\n--- Phase 1: Fetching API data ---")
+    print("=" * 60)
+    print("  CatboyDataFetcher - Beatmap DB Builder")
+    print("=" * 60)
+    print(f"  API:       {CATBOY_BASE}")
+    print(f"  Pages:     ~{max_offset // args.page_size}  ({args.page_size}/page, max offset={max_offset})")
+    print(f"  Threads:   {args.threads}")
+    print(f"  Output:    {args.output_dir}/")
+
+    # --- --all mode ---
+    if args.all:
+        print(f"\n  Mode:      --all (ranked + loved, all modes)")
+        t0 = time.time()
+
+        targets = [
+            (1, None, f"{args.output_dir}/catboy_ranked.db"),
+            (4, None, f"{args.output_dir}/catboy_loved.db"),
+        ]
+
+        for status, mode, out_path in targets:
+            sets, beatmaps = fetch_all(session, status, mode,
+                                       args.page_size, max_offset, args.threads)
+            if not sets:
+                print(f"  [ERROR] No data for status={status}")
+                return 1
+            write_to_sqlite(out_path, sets, beatmaps)
+
+        merge_databases(
+            [t[2] for t in targets],
+            f"{args.output_dir}/catboy_all.db",
+        )
+
+        print(f"\nDone!  Total time: {time.time() - t0:.0f}s")
+        return 0
+
+    # --- Single fetch mode ---
+    status = args.status
+    mode = args.mode
+
+    if args.output:
+        out_path = args.output
+    else:
+        mode_tag = f"_mode{mode}" if mode is not None else ""
+        out_path = f"{args.output_dir}/catboy_{_status_label(status)}{mode_tag}.db"
+
+    print(f"  Status:    {status} ({_status_label(status)})")
+    print(f"  Mode:      {mode if mode is not None else 'all'}")
+    print()
+
     t0 = time.time()
-    all_sets = []
-    all_beatmaps = []
-    ok_pages = 0
-    fail_pages = 0
+    sets, beatmaps = fetch_all(session, status, mode,
+                               args.page_size, max_offset, args.threads)
 
-    with ThreadPoolExecutor(max_workers=args.threads) as executor:
-        futures = {
-            executor.submit(fetch_page, session, off, args.page_size): off
-            for off in offsets
-        }
-        for future in as_completed(futures):
-            off = futures[future]
-            sets, beatmaps, ok = future.result()
-            if ok:
-                all_sets.extend(sets)
-                all_beatmaps.extend(beatmaps)
-                ok_pages += 1
-            else:
-                fail_pages += 1
-            print(f"  [Fetch] {ok_pages + fail_pages}/{len(offsets)} pages  "
-                  f"| Sets: {len(all_sets)}  | Beatmaps: {len(all_beatmaps)}")
-
-    t1 = time.time()
-    print(f"\nFetch complete in {t1 - t0:.1f}s.")
-    print(f"  Pages: {ok_pages} OK, {fail_pages} failed")
-    print(f"  BeatmapSets:  {len(all_sets)}")
-    print(f"  Beatmaps:     {len(all_beatmaps)}")
-
-    if not all_sets:
+    if not sets:
         print("\n[ERROR] No data fetched.")
-        print("If HTTP 403: try --cloudscraper flag (pip install cloudscraper)")
+        print("If HTTP 403: try --cloudscraper (pip install cloudscraper)")
         print("If SSL error: your Python SSL stack may need updating.")
         return 1
 
-    # --- Phase 2: Write ---
-    t2 = time.time()
-    write_to_sqlite(args.output, all_sets, all_beatmaps)
-    t3 = time.time()
-
-    print(f"\nDone!  Fetch: {t1 - t0:.1f}s  |  Write: {t3 - t2:.1f}s")
+    write_to_sqlite(out_path, sets, beatmaps)
+    print(f"\nDone!  Time: {time.time() - t0:.0f}s")
     return 0
 
 
