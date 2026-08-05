@@ -11,19 +11,20 @@
                 <Button x:Name="IeImportBtn" Content="Import" Classes="NavButton Selected" Click="IeNav_Click" Tag="import" Margin="0,0,0,6" />
                 <Button x:Name="IeExportBtn" Content="Export" Classes="NavButton" Click="IeNav_Click" Tag="export" Margin="0,0,0,6" />
                 <Button x:Name="IeTrimBtn" Content="Trim" Classes="NavButton" Click="IeNav_Click" Tag="trim" />
-
                 <!-- Import-mode action buttons -->
-                <StackPanel IsVisible="{Binding CollectionsVm.IsImportMode}" Margin="0,16,0,0" Spacing="8">
-                    <Button Content="Check Status" Classes="Primary"
-                            Command="{Binding CollectionsVm.CheckImportStatusCommand}"
-                            IsEnabled="{Binding CollectionsVm.CanOperate}" />
-                    <Button Content="Start Sync" Classes="Secondary"
-                            Command="{Binding CollectionsVm.StartImportSyncCommand}"
-                            IsEnabled="{Binding CollectionsVm.CanOperate}" />
-                    <Button Content="Apply Collection" Classes="Secondary"
-                            Command="{Binding CollectionsVm.ApplyCollectionsCommand}"
-                            IsEnabled="{Binding CollectionsVm.CanOperate}" />
-                </StackPanel>
+                <Border Classes="Card" IsVisible="{Binding CollectionsVm.IsImportMode}" Margin="0,16,0,0" Padding="14">
+                    <StackPanel Spacing="8">
+                        <Button Content="Check Status" Classes="Primary"
+                                Command="{Binding CollectionsVm.CheckImportStatusCommand}"
+                                IsEnabled="{Binding CollectionsVm.CanOperate}" />
+                        <Button Content="Start Sync" Classes="Secondary"
+                                Command="{Binding CollectionsVm.StartImportSyncCommand}"
+                                IsEnabled="{Binding CollectionsVm.CanOperate}" />
+                        <Button Content="Apply Collection" Classes="Secondary"
+                                Command="{Binding CollectionsVm.ApplyCollectionsCommand}"
+                                IsEnabled="{Binding CollectionsVm.CanOperate}" />
+                    </StackPanel>
+                </Border>
 
                 
 

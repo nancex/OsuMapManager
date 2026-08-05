@@ -18,6 +18,12 @@ public partial class SettingsViewModel : ViewModelBase
     /// </summary>
     public event Action<BeatmapDataService?>? DatabaseChanged;
 
+    /// <summary>
+    /// Invoked when the osu! installation path is changed by the user.
+    /// MainViewModel should recreate the OsuDataService with the new path.
+    /// </summary>
+    public event Action<string>? OsuPathChanged;
+
     // --- osu! Path ---
     [ObservableProperty]
     public partial string OsuInstallPath { get; set; } = string.Empty;
@@ -36,7 +42,7 @@ public partial class SettingsViewModel : ViewModelBase
 
     // --- Download source ---
     [ObservableProperty]
-    public partial bool UseOfficialSource { get; set; } = true;
+    public partial bool UseOfficialSource { get; set; } = false;
 
     [ObservableProperty]
     public partial bool UseCatboyMirror { get; set; }
@@ -106,7 +112,12 @@ public partial class SettingsViewModel : ViewModelBase
         SaveSettings();
     }
 
-    partial void OnOsuInstallPathChanged(string value) => AutoSave();
+    partial void OnOsuInstallPathChanged(string value)
+    {
+        AutoSave();
+        OsuPathChanged?.Invoke(value);
+        Console.WriteLine($"[SettingsViewModel] osu! path changed to: {value}");
+    }
     partial void OnDatabasePathChanged(string value) { AutoSave(); TryOpenDatabase(); }
     partial void OnDownloadThreadsChanged(int value) { AutoSave(); _settingsService!.Settings.DownloadThreads = value; _settingsService.Save(); }
     partial void OnUseOfficialSourceChanged(bool value) { if (value) { _settingsService!.Settings.DownloadSource = "official"; _settingsService.Save(); } }

@@ -72,6 +72,7 @@ public partial class MainViewModel : ViewModelBase
             // Pass settings to SettingsVm
             SettingsVm.SetSettingsService(_settingsService);
             SettingsVm.DatabaseChanged += OnDatabaseChanged;
+            SettingsVm.OsuPathChanged += OnOsuPathChanged;
 
             // Get beatmap data service from settings
             _beatmapDataService = SettingsVm.GetBeatmapDataService();
@@ -157,6 +158,35 @@ public partial class MainViewModel : ViewModelBase
         SyncVm.UpdateDatabaseService(_beatmapDataService);
         QueryVm.UpdateDatabaseService(_beatmapDataService);
         Console.WriteLine("[MainViewModel] Database changed — sub-viewmodels refreshed.");
+    }
+
+    /// <summary>
+    /// Called when the osu! installation path is changed in settings.
+    /// Recreates the OsuDataService and re-wires all sub-viewmodels.
+    /// </summary>
+    private async void OnOsuPathChanged(string newPath)
+    {
+        Console.WriteLine($"[MainViewModel] osu! path changed: {newPath}");
+
+        // Dispose old service
+        _osuDataService?.Dispose();
+        _osuDataService = null;
+
+        if (!string.IsNullOrEmpty(newPath))
+        {
+            _osuDataService = new OsuDataService(newPath);
+            _osuDataService.TryOpen();
+        }
+
+        // Re-wire services to all sub-viewmodels with the new OsuDataService
+        SyncVm.SetServices(_osuDataService, _beatmapDataService, _settingsService, this);
+        CollectionsVm.SetServices(_osuDataService, _settingsService, _beatmapDataService);
+        QueryVm.SetServices(_osuDataService, _beatmapDataService, _settingsService);
+
+        // Refresh local stats
+        await RefreshLocalStatsAsync();
+
+        ClearStatus();
     }
 }
 
