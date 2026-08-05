@@ -1,6 +1,7 @@
 using System;
 using Avalonia.Controls;
 using Avalonia.Interactivity;
+using OsuMapManager.Helpers;
 
 namespace OsuMapManager.Views;
 
@@ -27,7 +28,7 @@ public partial class UpdateDialog : Window
     {
         var dialog = new UpdateDialog();
         dialog.TitleText.Text = "Up to Date";
-        dialog.MessageText.Text = "You are running the latest version (v0.1.0).";
+        dialog.MessageText.Text = $"You are running the latest version ({AppVersion.Current}).";
         dialog.ShowDialog(owner);
     }
 

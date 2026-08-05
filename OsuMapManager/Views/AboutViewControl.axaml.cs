@@ -4,12 +4,13 @@ using System.Text.Json;
 using System.Threading.Tasks;
 using Avalonia.Controls;
 using Avalonia.Interactivity;
+using OsuMapManager.Helpers;
 
 namespace OsuMapManager.Views;
 
 public partial class AboutViewControl : UserControl
 {
-    private const string CurrentVersion = "v0.1.0";
+    private static readonly string CurrentVersion = AppVersion.Current;
     private const string ReleasesApiUrl = "https://api.github.com/repos/nancex/OsuMapManager/releases/latest";
     private const string ReleasesPageUrl = "https://github.com/nancex/OsuMapManager/releases/latest";
 
@@ -21,6 +22,7 @@ public partial class AboutViewControl : UserControl
     public AboutViewControl()
     {
         InitializeComponent();
+        VersionTextBlock.Text = CurrentVersion;
     }
 
     private void GitHubLink_Click(object? sender, RoutedEventArgs e)

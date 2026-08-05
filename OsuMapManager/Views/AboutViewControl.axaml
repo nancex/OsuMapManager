@@ -10,7 +10,7 @@
                                     <TextBlock Text="About" Classes="H1" />
                                     <Grid ColumnDefinitions="Auto,*" ColumnSpacing="16">
                                         <TextBlock Text="Version" Classes="Body" FontWeight="Bold" />
-                                        <TextBlock Grid.Column="1" Text="v0.1.0" Classes="Body" />
+                                        <TextBlock Grid.Column="1" x:Name="VersionTextBlock" Classes="Body" />
                                     </Grid>
                                     <Grid ColumnDefinitions="Auto,*" ColumnSpacing="16">
                                         <TextBlock Text="Repository" Classes="Body" FontWeight="Bold" />

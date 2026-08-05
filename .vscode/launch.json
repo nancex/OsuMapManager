@@ -1,0 +1,19 @@
+{
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "name": "C#: OsuMapManager",
+            "type": "coreclr",
+            "request": "launch",
+            "preLaunchTask": "build",
+            "program": "${workspaceFolder}/OsuMapManager/bin/Debug/net10.0/win-x64/OsuMapManager.exe",
+            "args": [],
+            "cwd": "${workspaceFolder}/OsuMapManager",
+            "stopAtEntry": false,
+            "console": "internalConsole",
+            "env": {
+                "AVALONIA_TELEMETRY_OPTOUT": "1"
+            }
+        }
+    ]
+}

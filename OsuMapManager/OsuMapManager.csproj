@@ -6,19 +6,28 @@
     <OutputType Condition="$([MSBuild]::IsOSPlatform('Windows'))">WinExe</OutputType>
     <OutputType Condition="!$([MSBuild]::IsOSPlatform('Windows'))">Exe</OutputType>
 
-    <!-- RuntimeIdentifier: specify at build time, e.g. -r win-x64 / -r linux-x64 -->
-    <!-- Defaults to win-x64 for backward compatibility -->
+    <!-- Supported runtime identifiers. Build with -r <rid>, e.g. dotnet publish -r linux-x64 -->
+    <!-- win-x64 | win-arm64 | linux-x64 | linux-arm64 | osx-x64 | osx-arm64 -->
+
+    <!-- Default RID when not specified (dev convenience) -->
     <RuntimeIdentifier Condition="'$(RuntimeIdentifier)' == ''">win-x64</RuntimeIdentifier>
 
     <SelfContained>true</SelfContained>
 
-    <!-- Disable single-file: Realm and SkiaSharp native libs are incompatible -->
+    <!-- Single-file publish: native libs (Realm, SkiaSharp) are extracted at runtime via IncludeNativeLibrariesForSelfExtract -->
     <PublishSingleFile>true</PublishSingleFile>
-    <IncludeNativeLibrariesForSelfExtract Condition="$([MSBuild]::IsOSPlatform('Windows'))">true</IncludeNativeLibrariesForSelfExtract>
+    <IncludeNativeLibrariesForSelfExtract>true</IncludeNativeLibrariesForSelfExtract>
+
+    <!-- Trimming is off: Realm and CommunityToolkit.Mvvm use reflection heavily -->
     <PublishTrimmed>false</PublishTrimmed>
 
-    <!-- Keep trimming off for Realm reflection -->
-    <PublishTrimmed>false</PublishTrimmed>
+    <!-- Release-only size optimizations -->
+    <DebuggerSupport Condition="'$(Configuration)' == 'Release'">false</DebuggerSupport>
+    <EventSourceSupport Condition="'$(Configuration)' == 'Release'">false</EventSourceSupport>
+    <UseSystemResourceKeys Condition="'$(Configuration)' == 'Release'">true</UseSystemResourceKeys>
+
+
+    <PublishReadyToRun>false</PublishReadyToRun>
 
     <DebugType>none</DebugType>
     <CopyOutputSymbolsToPublishDirectory>false</CopyOutputSymbolsToPublishDirectory>
@@ -30,6 +39,7 @@
   <ItemGroup>
     <Folder Include="Models\" />
     <AvaloniaResource Include="Assets\**" />
+    <EmbeddedResource Include="..\VERSION" Link="VERSION" />
   </ItemGroup>
 
   <ItemGroup>
@@ -48,7 +58,7 @@
     <PackageReference Include="SharpZipLib" Version="1.4.2" />
   </ItemGroup>
 
-  <!-- Copy Realm native libraries for the target platform -->
+  <!-- Copy Realm native libraries to publish root -->
   <Target Name="CopyRealmNativeLibs" AfterTargets="Publish">
     <!-- Windows -->
     <ItemGroup Condition="$(RuntimeIdentifier.StartsWith('win'))">
