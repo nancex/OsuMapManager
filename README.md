@@ -2,6 +2,8 @@
 
 An osu! lazer beatmap management tool — sync your local library against a beatmap database, query beatmaps, and manage your collections.
 
+![UI demonstration](docs/images/1.png)
+
 ## Usage
 
 1. **Settings** — Point the app to your osu! lazer installation folder and a beatmap database (contains only metadata for downloading reference; you can download one from `./map_dbs`, or generate one using `fetch_catboy.py`).
